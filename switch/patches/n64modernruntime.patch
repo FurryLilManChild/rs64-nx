@@ -152,27 +152,101 @@ index e6c40f9..37c30e5 100644
      // Free rdram.
      bool free_failed;
 diff --git a/thirdparty/concurrentqueue/lightweightsemaphore.h b/thirdparty/concurrentqueue/lightweightsemaphore.h
-index 41ba094..30af8fd 100644
+index 41ba094..ef90c2b 100644
 --- a/thirdparty/concurrentqueue/lightweightsemaphore.h
 +++ b/thirdparty/concurrentqueue/lightweightsemaphore.h
-@@ -24,7 +24,7 @@ extern "C" {
+@@ -24,6 +24,13 @@ extern "C" {
  }
  #elif defined(__MACH__)
  #include <mach/mach.h>
--#elif defined(__unix__)
-+#elif defined(__unix__) || defined(__SWITCH__)
++#elif defined(__SWITCH__)
++extern "C" {
++#include <switch/types.h>
++#include <switch/arm/counter.h>
++#include <switch/kernel/mutex.h>
++#include <switch/kernel/condvar.h>
++}
+ #elif defined(__unix__)
  #include <semaphore.h>
  
- #if defined(__GLIBC_PREREQ) && defined(_GNU_SOURCE)
-@@ -165,7 +165,7 @@ public:
+@@ -165,6 +172,77 @@ public:
  		}
  	}
  };
--#elif defined(__unix__)
-+#elif defined(__unix__) || defined(__SWITCH__)
++#elif defined(__SWITCH__)
++//---------------------------------------------------------
++// Semaphore (libnx mutex + condition variable)
++//---------------------------------------------------------
++// newlib's sem_timedwait converts a CLOCK_REALTIME deadline; the kernel condition variable takes a relative
++// timeout, so short timed waits really sleep instead of returning at once and spinning.
++class Semaphore
++{
++private:
++	::Mutex m_mutex;
++	::CondVar m_cond;
++	int m_count;
++
++	Semaphore(const Semaphore& other) MOODYCAMEL_DELETE_FUNCTION;
++	Semaphore& operator=(const Semaphore& other) MOODYCAMEL_DELETE_FUNCTION;
++
++public:
++	Semaphore(int initialCount = 0) : m_count(initialCount)
++	{
++		mutexInit(&m_mutex);
++		condvarInit(&m_cond);
++	}
++
++	bool wait()
++	{
++		mutexLock(&m_mutex);
++		while (m_count <= 0) condvarWait(&m_cond, &m_mutex);
++		m_count--;
++		mutexUnlock(&m_mutex);
++		return true;
++	}
++
++	bool try_wait()
++	{
++		mutexLock(&m_mutex);
++		const bool ok = m_count > 0;
++		if (ok) m_count--;
++		mutexUnlock(&m_mutex);
++		return ok;
++	}
++
++	bool timed_wait(std::uint64_t usecs)
++	{
++		const std::uint64_t deadline = armGetSystemTick() + armNsToTicks(usecs * 1000);
++		mutexLock(&m_mutex);
++		while (m_count <= 0) {
++			const std::uint64_t now = armGetSystemTick();
++			if (now >= deadline) {
++				mutexUnlock(&m_mutex);
++				return false;
++			}
++			condvarWaitTimeout(&m_cond, &m_mutex, armTicksToNs(deadline - now));
++		}
++		m_count--;
++		mutexUnlock(&m_mutex);
++		return true;
++	}
++
++	void signal()
++	{
++		mutexLock(&m_mutex);
++		m_count++;
++		condvarWakeOne(&m_cond);
++		mutexUnlock(&m_mutex);
++	}
++
++	void signal(int count)
++	{
++		while (count-- > 0) signal();
++	}
++};
+ #elif defined(__unix__)
  //---------------------------------------------------------
  // Semaphore (POSIX, Linux)
- //---------------------------------------------------------
 diff --git a/ultramodern/include/ultramodern/renderer_context.hpp b/ultramodern/include/ultramodern/renderer_context.hpp
 index f43e843..933860f 100644
 --- a/ultramodern/include/ultramodern/renderer_context.hpp

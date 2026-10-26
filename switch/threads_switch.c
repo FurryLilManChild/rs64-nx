@@ -60,6 +60,12 @@ static int core_for(const char* name) {
     return -1;
 }
 
+// HOS never time-slices between priorities: a game thread polling at 0x30 (Rogue Squadron's waitForMusyXAudioTaskDone
+// yields in a loop until the synth finishes) kept the 0x3B RSP task thread on its core from ever running. The RSP
+// thread runs just above the game threads instead; they wait on its results anyway.
+#define RSP_TASK_PRIORITY 0x2F
+static __thread int is_rsp_task_thread;
+
 #ifdef CVNX_REMOTE
 void cvnx_remote_track_thread(const char* name, Handle handle);
 #endif
@@ -68,6 +74,7 @@ void cvnx_place_thread(const char* name) {
 #ifdef CVNX_REMOTE
     cvnx_remote_track_thread(name, threadGetCurHandle());
 #endif
+    is_rsp_task_thread = strcmp(name, "SP Task Thread") == 0;
     int core = core_for(name);
     if (core >= 0) {
         svcSetThreadCoreMask(CUR_THREAD_HANDLE, core, 1u << core);
@@ -85,7 +92,9 @@ bool cvnx_wait_thread_exit(void* native_handle, u64 timeout_ns) {
 // where lower is more urgent; 0x2C is libnx's main thread, 0x3B its default for new threads.
 void cvnx_set_thread_priority(int level) {
     static const u32 hos_priority[] = {0x3C, 0x3B, 0x30, 0x2D, 0x2C};
-    if (level >= 0 && level < (int)(sizeof(hos_priority) / sizeof(hos_priority[0]))) {
+    if (is_rsp_task_thread) {
+        svcSetThreadPriority(CUR_THREAD_HANDLE, RSP_TASK_PRIORITY);
+    } else if (level >= 0 && level < (int)(sizeof(hos_priority) / sizeof(hos_priority[0]))) {
         svcSetThreadPriority(CUR_THREAD_HANDLE, hos_priority[level]);
     }
 }
