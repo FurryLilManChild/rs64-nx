@@ -219,7 +219,7 @@ index 8ca779e..f415d72 100644
  #else
      std::quick_exit(exit_status);
 diff --git a/ultramodern/src/events.cpp b/ultramodern/src/events.cpp
-index ad66a01..aca10ec 100644
+index ad66a01..22f6afe 100644
 --- a/ultramodern/src/events.cpp
 +++ b/ultramodern/src/events.cpp
 @@ -61,6 +61,10 @@ extern "C" int rs64_gfx_parse_inflight_wait(int ms) {
@@ -233,7 +233,17 @@ index ad66a01..aca10ec 100644
  
  static ultramodern::events::callbacks_t events_callbacks{};
  
-@@ -316,6 +320,36 @@ void ai_thread_func() {
+@@ -228,6 +232,9 @@ static struct {
+     std::mutex message_mutex;
+     uint8_t* rdram;
+     moodycamel::BlockingConcurrentQueue<Action> action_queue{};
++    // Graphics tasks, taken before action_queue: with presents slower than a VI (GLideN64 waiting on vsync), moodycamel
++    // keeps serving the VI thread's screen updates and a queued task can wait forever.
++    moodycamel::ConcurrentQueue<Action> gfx_task_queue{};
+     moodycamel::BlockingConcurrentQueue<OSTask*> sp_task_queue{};
+     moodycamel::ConcurrentQueue<OSThread*> deleted_threads{};
+ } events_context{};
+@@ -316,6 +323,36 @@ void ai_thread_func() {
      }
  }
  
@@ -270,7 +280,7 @@ index ad66a01..aca10ec 100644
  void vi_thread_func() {
      ultramodern::set_native_thread_name("VI Thread");
      // This thread should be prioritized over every other thread in the application, as it's what allows
-@@ -341,7 +375,13 @@ void vi_thread_func() {
+@@ -341,7 +378,13 @@ void vi_thread_func() {
              // printf("Skipping the next VI wait\n");
              next = std::chrono::high_resolution_clock::now();
          }
@@ -284,7 +294,7 @@ index ad66a01..aca10ec 100644
          auto time_now = ultramodern::time_since_start();
          // Calculate how many VIs have passed
          uint64_t new_total_vis = (time_now * (60 * ultramodern::get_speed_multiplier()) / 1000ms) + 1;
-@@ -356,13 +396,38 @@ void vi_thread_func() {
+@@ -356,13 +399,38 @@ void vi_thread_func() {
              set_dummy_vi(odd);
              odd = !odd;
          }
@@ -323,7 +333,16 @@ index ad66a01..aca10ec 100644
  
          // DIAG-3: read first 4 bytes at VI ORIGIN to distinguish black/white/content
          // framebuffers. If fb_first == 0x00010001, the VI is pointing at a
-@@ -661,6 +726,22 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
+@@ -585,7 +653,7 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
+     while (!exited) {
+         // Try to pull an action from the queue
+         Action action;
+-        if (events_context.action_queue.wait_dequeue_timed(action, 1ms)) {
++        if (events_context.gfx_task_queue.try_dequeue(action) || events_context.action_queue.wait_dequeue_timed(action, 1ms)) {
+             // Determine the action type and act on it
+             if (const auto* task_action = std::get_if<SpTaskAction>(&action)) {
+                 // Turn on instant present if the game has been started and it hasn't been turned on yet.
+@@ -661,6 +729,22 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
              }
              else if (const auto* screen_update_action = std::get_if<ScreenUpdateAction>(&action)) {
                  events_context.vi.update_screen_regs = screen_update_action->regs;
@@ -346,6 +365,15 @@ index ad66a01..aca10ec 100644
                  renderer_context->update_screen();
                  display_refresh_rate = renderer_context->get_display_framerate();
                  resolution_scale = renderer_context->get_resolution_scale();
+@@ -884,7 +968,7 @@ void ultramodern::submit_rsp_task(RDRAM_ARG PTR(OSTask) task_) {
+     // processDisplayLists(isHLE=true). Non-GFX tasks (audio, etc.) still go
+     // to sp_task_queue → task_thread_func → rsp::run_task (LLE).
+     if (task->t.type == M_GFXTASK) {
+-        events_context.action_queue.enqueue(SpTaskAction{ *task, parse_snapshot_enabled() ? take_rdram_snapshot(rdram) : nullptr });
++        events_context.gfx_task_queue.enqueue(SpTaskAction{ *task, parse_snapshot_enabled() ? take_rdram_snapshot(rdram) : nullptr });
+         // RogueSquadron64Recomp (2026-09-07): ROGUESQ_GFX_SYNC_SUBMIT=1 waits until the gfx thread has
+         // parsed this list (send_dl + dp_complete). On hardware the RSP consumes the list before the game
+         // can recycle its DL chunks; otherwise the game thread runs ahead and reuses chunks the HLE is
 diff --git a/ultramodern/src/mesgqueue.cpp b/ultramodern/src/mesgqueue.cpp
 index ff27cd1..bfd0eb9 100644
 --- a/ultramodern/src/mesgqueue.cpp

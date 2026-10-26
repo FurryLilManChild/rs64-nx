@@ -5,6 +5,7 @@
 #include <atomic>
 #include <malloc.h>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 

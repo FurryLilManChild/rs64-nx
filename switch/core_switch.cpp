@@ -7,6 +7,9 @@
 #include <string>
 
 #include <SDL.h>
+#ifdef CVNX_HOST
+#include <dlfcn.h>
+#endif
 
 #include "m64p_config.h"
 #include "m64p_types.h"
@@ -288,9 +291,10 @@ m64p_error nx_VidExt_GL_SwapBuffers(void) {
     // New shaders reach the SD card within SHADER_SAVE_MS, so the next start compiles them before play.
     constexpr uint64_t SHADER_SAVE_MS = 10000;
     static uint64_t shaders_saved_at = 0;
+    // Saving shows GLideN64's progress text, which swaps through here again: stamp the time first.
     if (SDL_GetTicks64() - shaders_saved_at >= SHADER_SAVE_MS) {
-        cvnx_gliden64_save_shaders();
         shaders_saved_at = SDL_GetTicks64();
+        cvnx_gliden64_save_shaders();
     }
     cvnx_menu_on_swap(nx::screen_width(), nx::screen_height());
 #ifdef CVNX_REMOTE
@@ -311,7 +315,8 @@ m64p_error CorePluginGetVersion(m64p_plugin_type* type, int* version, int* api_v
     return M64ERR_SUCCESS;
 }
 
-void* dlsym(void*, const char* name) {
+void* dlsym(void* handle, const char* name) {
+    (void)handle;
     struct Entry { const char* name; void* fn; };
     static const Entry table[] = {
 #define CORE_FN(fn) {#fn, reinterpret_cast<void*>(&nx_##fn)}
@@ -337,8 +342,15 @@ void* dlsym(void*, const char* name) {
             return entry.fn;
         }
     }
+#ifdef CVNX_HOST
+    // Linux test harness: everything else (SDL's libraries) resolves through the real dlsym.
+    using DlsymFn = void* (*)(void*, const char*);
+    static const DlsymFn real_dlsym = reinterpret_cast<DlsymFn>(dlvsym(RTLD_NEXT, "dlsym", "GLIBC_2.34"));
+    return real_dlsym(handle, name);
+#else
     fprintf(stderr, "[CVNX] core symbol not provided: %s\n", name);
     return nullptr;
+#endif
 }
 
 } // extern "C"
