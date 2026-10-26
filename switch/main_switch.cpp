@@ -2,6 +2,8 @@
 // (RT64, ImGui panels, touch, file dialogs): the game boots straight from the ROM placed in sdmc:/switch/rs64recomp/.
 // Based on DK64Recomp-NX by Trinalord777 (switch/main_switch.cpp).
 #include <algorithm>
+#include <atomic>
+#include <thread>
 #include <array>
 #include <cctype>
 #include <cinttypes>
@@ -32,6 +34,11 @@
 #include "ultramodern/config.hpp"
 #include "ultramodern/renderer_context.hpp"
 #include "ultramodern/ultramodern.hpp"
+
+extern "C" {
+    extern std::atomic<uint32_t> cvnx_hb_gfx_submit, cvnx_hb_gfx_parsed, cvnx_hb_sp_submit, cvnx_hb_sp_done, cvnx_hb_vi, cvnx_hb_screen;
+    extern std::atomic<int> cvnx_gfx_stage;
+}
 
 
 SDL_Window* cvnx_window = nullptr;
@@ -124,10 +131,24 @@ namespace {
         const std::string previous_path = (DATA_DIR / "rs64recomp.prev.log").string();
         std::remove(previous_path.c_str());
         std::rename(log_path.c_str(), previous_path.c_str());
-        freopen(log_path.c_str(), "w", stdout);
+        // Both streams append: two write-mode streams on one file each keep their own offset and overwrite each other.
+        if (FILE* f = std::fopen(log_path.c_str(), "w")) std::fclose(f);
+        freopen(log_path.c_str(), "a", stdout);
         freopen(log_path.c_str(), "a", stderr);
         setvbuf(stdout, nullptr, _IONBF, 0);
         setvbuf(stderr, nullptr, _IONBF, 0);
+    }
+
+    // A log line every 3 s for the first 90 s, then every 30 s: runtime progress counters, to tell where a hang sits.
+    void start_heartbeat() {
+        std::thread([] {
+            for (int i = 0;; i++) {
+                svcSleepThread(i < 30 ? 3000000000ULL : 30000000000ULL);
+                printf("[CVNX] hb %llu ms: gfx %u/%u, rsp %u/%u, vi %u, screen %u, gfx stage %d\n", cvnx_ms_since_boot(),
+                       cvnx_hb_gfx_submit.load(), cvnx_hb_gfx_parsed.load(), cvnx_hb_sp_submit.load(), cvnx_hb_sp_done.load(),
+                       cvnx_hb_vi.load(), cvnx_hb_screen.load(), cvnx_gfx_stage.load());
+            }
+        }).detach();
     }
 
     bool is_rom_extension(std::string ext) {
@@ -243,6 +264,7 @@ int main(int argc, char** argv) {
     nx::load();
     nx::cheats::load();
     cvnx_perf_start();
+    start_heartbeat();
 #ifdef CVNX_REMOTE
     cvnx_remote_start();
 #endif

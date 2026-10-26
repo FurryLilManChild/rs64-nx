@@ -219,10 +219,10 @@ index 8ca779e..f415d72 100644
  #else
      std::quick_exit(exit_status);
 diff --git a/ultramodern/src/events.cpp b/ultramodern/src/events.cpp
-index ad66a01..22f6afe 100644
+index ad66a01..8d1f41f 100644
 --- a/ultramodern/src/events.cpp
 +++ b/ultramodern/src/events.cpp
-@@ -61,6 +61,10 @@ extern "C" int rs64_gfx_parse_inflight_wait(int ms) {
+@@ -61,9 +61,18 @@ extern "C" int rs64_gfx_parse_inflight_wait(int ms) {
  
  #include "ultramodern/rsp.hpp"
  #include "ultramodern/renderer_context.hpp"
@@ -233,7 +233,15 @@ index ad66a01..22f6afe 100644
  
  static ultramodern::events::callbacks_t events_callbacks{};
  
-@@ -228,6 +232,9 @@ static struct {
++// Progress counters for the Switch log heartbeat (switch/main_switch.cpp).
++extern "C" {
++    std::atomic<uint32_t> cvnx_hb_gfx_submit{0}, cvnx_hb_gfx_parsed{0}, cvnx_hb_sp_submit{0}, cvnx_hb_sp_done{0}, cvnx_hb_vi{0}, cvnx_hb_screen{0};
++}
++
+ void ultramodern::events::set_callbacks(const ultramodern::events::callbacks_t& callbacks) {
+     events_callbacks = callbacks;
+ }
+@@ -228,6 +237,9 @@ static struct {
      std::mutex message_mutex;
      uint8_t* rdram;
      moodycamel::BlockingConcurrentQueue<Action> action_queue{};
@@ -243,7 +251,7 @@ index ad66a01..22f6afe 100644
      moodycamel::BlockingConcurrentQueue<OSTask*> sp_task_queue{};
      moodycamel::ConcurrentQueue<OSThread*> deleted_threads{};
  } events_context{};
-@@ -316,6 +323,36 @@ void ai_thread_func() {
+@@ -316,6 +328,36 @@ void ai_thread_func() {
      }
  }
  
@@ -280,7 +288,7 @@ index ad66a01..22f6afe 100644
  void vi_thread_func() {
      ultramodern::set_native_thread_name("VI Thread");
      // This thread should be prioritized over every other thread in the application, as it's what allows
-@@ -341,7 +378,13 @@ void vi_thread_func() {
+@@ -341,9 +383,16 @@ void vi_thread_func() {
              // printf("Skipping the next VI wait\n");
              next = std::chrono::high_resolution_clock::now();
          }
@@ -293,8 +301,11 @@ index ad66a01..22f6afe 100644
 +#endif
          auto time_now = ultramodern::time_since_start();
          // Calculate how many VIs have passed
++        cvnx_hb_vi.fetch_add(1);
          uint64_t new_total_vis = (time_now * (60 * ultramodern::get_speed_multiplier()) / 1000ms) + 1;
-@@ -356,13 +399,38 @@ void vi_thread_func() {
+         if (new_total_vis > total_vis + 1) {
+             //printf("Skipped % " PRId64 " frames in VI interupt thread!\n", new_total_vis - total_vis - 1);
+@@ -356,13 +405,38 @@ void vi_thread_func() {
              set_dummy_vi(odd);
              odd = !odd;
          }
@@ -333,7 +344,18 @@ index ad66a01..22f6afe 100644
  
          // DIAG-3: read first 4 bytes at VI ORIGIN to distinguish black/white/content
          // framebuffers. If fb_first == 0x00010001, the VI is pointing at a
-@@ -585,7 +653,7 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
+@@ -500,7 +574,9 @@ void task_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_r
+             sp_complete();
+         }
+ 
+-        if (!ultramodern::rsp::run_task(PASS_RDRAM task)) {
++        const bool cvnx_ran = ultramodern::rsp::run_task(PASS_RDRAM task);
++        cvnx_hb_sp_done.fetch_add(1);
++        if (!cvnx_ran) {
+             fprintf(stderr, "Failed to execute task type: %" PRIu32 "\n", task->t.type);
+             ULTRAMODERN_QUICK_EXIT();
+         }
+@@ -585,7 +661,7 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
      while (!exited) {
          // Try to pull an action from the queue
          Action action;
@@ -342,7 +364,15 @@ index ad66a01..22f6afe 100644
              // Determine the action type and act on it
              if (const auto* task_action = std::get_if<SpTaskAction>(&action)) {
                  // Turn on instant present if the game has been started and it hasn't been turned on yet.
-@@ -661,6 +729,22 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
+@@ -650,6 +726,7 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
+ 
+                 if (s_sp_after) sp_complete();
+                 dp_complete();
++                cvnx_hb_gfx_parsed.fetch_add(1);
+                 { std::lock_guard<std::mutex> plock{ g_gfx_parse_mutex }; if (g_gfx_parse_inflight.load(std::memory_order_acquire) > 0) g_gfx_parse_inflight.fetch_sub(1, std::memory_order_acq_rel); }
+                 g_gfx_parse_cv.notify_all();
+                 if (s_log_task) { fprintf(stderr, "[gfx-task #%u] done sp+dp signaled parse=%lld us pdl=%lld us hops=%u faces=%u req=%u inflight=%d\n", s_task_n, (long long)std::chrono::duration_cast<std::chrono::microseconds>(renderer_end - renderer_start).count(), g_rs64_pdl_us, g_f5_task_hops, g_f5_task_faces, g_rs64_gfx_requests, g_gfx_parse_inflight.load(std::memory_order_acquire)); fflush(stderr); }
+@@ -661,7 +738,24 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
              }
              else if (const auto* screen_update_action = std::get_if<ScreenUpdateAction>(&action)) {
                  events_context.vi.update_screen_regs = screen_update_action->regs;
@@ -363,17 +393,28 @@ index ad66a01..22f6afe 100644
 +                }
 +#endif
                  renderer_context->update_screen();
++                cvnx_hb_screen.fetch_add(1);
                  display_refresh_rate = renderer_context->get_display_framerate();
                  resolution_scale = renderer_context->get_resolution_scale();
-@@ -884,7 +968,7 @@ void ultramodern::submit_rsp_task(RDRAM_ARG PTR(OSTask) task_) {
+             }
+@@ -884,7 +978,8 @@ void ultramodern::submit_rsp_task(RDRAM_ARG PTR(OSTask) task_) {
      // processDisplayLists(isHLE=true). Non-GFX tasks (audio, etc.) still go
      // to sp_task_queue → task_thread_func → rsp::run_task (LLE).
      if (task->t.type == M_GFXTASK) {
 -        events_context.action_queue.enqueue(SpTaskAction{ *task, parse_snapshot_enabled() ? take_rdram_snapshot(rdram) : nullptr });
++        cvnx_hb_gfx_submit.fetch_add(1);
 +        events_context.gfx_task_queue.enqueue(SpTaskAction{ *task, parse_snapshot_enabled() ? take_rdram_snapshot(rdram) : nullptr });
          // RogueSquadron64Recomp (2026-09-07): ROGUESQ_GFX_SYNC_SUBMIT=1 waits until the gfx thread has
          // parsed this list (send_dl + dp_complete). On hardware the RSP consumes the list before the game
          // can recycle its DL chunks; otherwise the game thread runs ahead and reuses chunks the HLE is
+@@ -897,6 +992,7 @@ void ultramodern::submit_rsp_task(RDRAM_ARG PTR(OSTask) task_) {
+         if (audio_async_enabled() && task->t.type == M_AUDTASK) {
+             g_pending_audio_synth.fetch_add(1, std::memory_order_acq_rel);
+         }
++        cvnx_hb_sp_submit.fetch_add(1);
+         events_context.sp_task_queue.enqueue(task);
+     }
+ }
 diff --git a/ultramodern/src/mesgqueue.cpp b/ultramodern/src/mesgqueue.cpp
 index ff27cd1..bfd0eb9 100644
 --- a/ultramodern/src/mesgqueue.cpp

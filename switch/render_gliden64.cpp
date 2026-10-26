@@ -80,6 +80,8 @@ std::atomic<uint32_t> cvnx_mem_used_mib{0};     // the process, as the kernel co
 std::atomic<uint32_t> cvnx_mem_total_mib{0};
 std::atomic<uint32_t> cvnx_mem_gl_errors{0};    // samples that found a GL error
 std::atomic<uint32_t> cvnx_mem_last_gl_error{0};
+// What the graphics thread is doing, for the log heartbeat: 1 and 3 display-list passes, 2 presenting.
+extern "C" { std::atomic<int> cvnx_gfx_stage{0}; }
 
 namespace {
     // OSTask is copied where the RSP boot code leaves it, at the end of DMEM.
@@ -279,7 +281,9 @@ namespace {
             cvnx_dl_count = dl_index + 1;
             cvnx_interp_frame_begin();
             cvnx_rt64ex_save_state();
+            cvnx_gfx_stage = 1;
             ProcessDList();
+            cvnx_gfx_stage = 0;
             const uint64_t second = armGetSystemTick();
             CVNX_TIME(2, start);
             cvnx_pass1_us = static_cast<uint32_t>(armTicksToNs(second - start) / 1000);
@@ -298,7 +302,9 @@ namespace {
                 const uint64_t second_start = armGetSystemTick();
                 cvnx_rt64ex_restore_state();
                 sp_status_reg = 0x0203;
+                cvnx_gfx_stage = 3;
                 ProcessDList();
+                cvnx_gfx_stage = 0;
                 cvnx_interp_end_second_pass();
                 CVNX_TIME(3, second_start);
                 cvnx_pass2_us = static_cast<uint32_t>(armTicksToNs(armGetSystemTick() - second_start) / 1000);
@@ -321,7 +327,9 @@ namespace {
             // 60 fps: a new frame shows its in-between image first; the next VI presents the real one.
             if (cvnx_interp_present_in_between(origin)) {
                 CVNX_SHOWN(origin, true);
+                cvnx_gfx_stage = 2;
                 UpdateScreen();
+                cvnx_gfx_stage = 0;
                 presents++;
                 cvnx_interp_present_done();
                 held_presents = 0;
@@ -335,7 +343,9 @@ namespace {
                 presented_origin = origin;
                 [[maybe_unused]] const uint64_t start = armGetSystemTick();
                 CVNX_SHOWN(origin, false);
+                cvnx_gfx_stage = 2;
                 UpdateScreen();
+                cvnx_gfx_stage = 0;
                 presents++;
                 CVNX_TIME(1, start);
             }
