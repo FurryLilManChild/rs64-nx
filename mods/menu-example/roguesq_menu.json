@@ -1,0 +1,17 @@
+{
+  "//": "A self-contained mod that adds its own custom menu page. A `submenu` button opens a named page; buttons whose menu is that page name are its entries, and Back is added automatically. The entries mix this mod's native library (menu_example.cpp -> menu_example.dll, @exports) with a built-in behavior (fullscreen). See docs/adding-menus-and-buttons.md.",
+  "buttons": [
+    { "id": "example_open", "menu": "main_menu", "type": "submenu", "page": "example",
+      "label": "EXAMPLE MENU", "title": "EXAMPLE MENU" },
+
+    { "id": "example_hello", "menu": "example", "type": "action", "action": "@example_hello",
+      "label": "SAY HELLO" },
+    { "id": "example_flag", "menu": "example", "type": "toggle", "toggle": "@example_flag",
+      "label_on": "FLAG: ON", "label_off": "FLAG: OFF" },
+    { "id": "example_fullscreen", "menu": "example", "type": "toggle", "toggle": "fullscreen",
+      "label_on": "FULLSCREEN: ON", "label_off": "FULLSCREEN: OFF" },
+
+    { "id": "example_gs", "menu": "game_settings", "type": "toggle", "toggle": "@example_flag",
+      "label_on": "EXAMPLE: ON", "label_off": "EXAMPLE: OFF", "replace": "crosshairs" }
+  ]
+}

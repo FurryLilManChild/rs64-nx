@@ -1,0 +1,520 @@
+diff --git a/librecomp/include/librecomp/addresses.hpp b/librecomp/include/librecomp/addresses.hpp
+index 2633b08..9c28ab5 100644
+--- a/librecomp/include/librecomp/addresses.hpp
++++ b/librecomp/include/librecomp/addresses.hpp
+@@ -6,10 +6,17 @@
+ #include "recomp.h"
+ 
+ namespace recomp {
++#ifdef __SWITCH__
++    // Horizon commits memory eagerly: 16MB (rdram + patch area) plus a 48MB recomp heap,
++    // and no 4GB guard reservation.
++    constexpr size_t mem_size = 64ULL * 1024ULL * 1024ULL;
++    constexpr size_t allocation_size = mem_size;
++#else
+     // 512GB (kseg0 size)
+     constexpr size_t mem_size = 512ULL * 1024ULL * 1024ULL;
+     // 4GB (the full address space); 32-bit hosts reserve only mem_size and mask guest addresses instead (RDRAM_OFFSET).
+     constexpr size_t allocation_size = sizeof(void*) == 4 ? mem_size : (size_t)(4096ULL * 1024ULL * 1024ULL);
++#endif
+     // We need a place in rdram to hold the PI handles, so pick an address in extended rdram
+     constexpr int32_t cart_handle = 0x80800000;
+     constexpr int32_t drive_handle = (int32_t)(cart_handle + sizeof(OSPiHandle));
+diff --git a/librecomp/src/fault_guard.cpp b/librecomp/src/fault_guard.cpp
+index ea0eb6f..36d5ad1 100644
+--- a/librecomp/src/fault_guard.cpp
++++ b/librecomp/src/fault_guard.cpp
+@@ -1,6 +1,12 @@
+ #include "librecomp/fault_guard.hpp"
+ 
+-#ifndef _WIN32
++#if defined(__SWITCH__)
++// No POSIX signals on Horizon: a guest fault reaches the process crash handler (switch/crash_switch.c).
++bool recomp::fault_guard::run(void (*fn)(void*), void* arg, Info*) {
++    fn(arg);
++    return true;
++}
++#elif !defined(_WIN32)
+ #include <atomic>
+ #include <csetjmp>
+ #include <csignal>
+diff --git a/librecomp/src/files.cpp b/librecomp/src/files.cpp
+index af6f18d..d2fe729 100644
+--- a/librecomp/src/files.cpp
++++ b/librecomp/src/files.cpp
+@@ -36,6 +36,19 @@ bool recomp::finalize_output_file_with_backup(const std::filesystem::path& filep
+     temp_path += temp_suffix;
+ 
+     std::error_code ec;
++#ifdef __SWITCH__
++    // libstdc++'s copy_file ends with fchmod, which libnx's SD driver rejects (ENOSYS), so every
++    // copy fails. Rotate with renames instead; FAT renames refuse an existing target, hence the removes.
++    std::filesystem::remove(backup_path, ec);
++    if (std::filesystem::exists(filepath, ec)) {
++        std::filesystem::rename(filepath, backup_path, ec);
++        if (ec) {
++            return false;
++        }
++    }
++    std::filesystem::rename(temp_path, filepath, ec);
++    return !ec;
++#endif
+     if (std::filesystem::exists(filepath, ec)) {
+         std::filesystem::copy_file(filepath, backup_path, std::filesystem::copy_options::overwrite_existing, ec);
+         if (ec) {
+diff --git a/librecomp/src/mods.cpp b/librecomp/src/mods.cpp
+index 1385e2d..8d14fc1 100644
+--- a/librecomp/src/mods.cpp
++++ b/librecomp/src/mods.cpp
+@@ -611,10 +611,23 @@ recomp::mods::GenericFunction recomp::mods::LiveRecompilerCodeHandle::get_functi
+     return GenericFunction{ recompiler_output->functions[func_index] };
+ }
+ 
++#ifdef __SWITCH__
++// Horizon never makes a code page executable again once it was writable: the jump goes in through a second,
++// writable mapping of the page (switch/jit_switch.c).
++extern "C" bool cvnx_write_code(void* destination, const void* bytes, size_t size);
++#endif
++
+ void patch_func(recomp_func_t* target_func, recomp::mods::GenericFunction replacement_func) {
+     uint8_t* target_func_u8 = reinterpret_cast<uint8_t*>(target_func);
+     size_t offset = 0;
+ 
++#ifdef __SWITCH__
++    uint8_t patch_bytes[32];
++    auto write_bytes = [&](const void* bytes, size_t count) {
++        memcpy(patch_bytes + offset, bytes, count);
++        offset += count;
++    };
++#else
+     auto write_bytes = [&](const void* bytes, size_t count) {
+         memcpy(target_func_u8 + offset, bytes, count);
+         offset += count;
+@@ -622,6 +635,7 @@ void patch_func(recomp_func_t* target_func, recomp::mods::GenericFunction replac
+ 
+     uint64_t old_flags;
+     unprotect(target_func_u8, &old_flags);
++#endif
+ 
+ #if defined(IS_X86_64)
+     static const uint8_t movabs_rax[] = {0x48, 0xB8};
+@@ -664,14 +678,22 @@ void patch_func(recomp_func_t* target_func, recomp::mods::GenericFunction replac
+ #   error "Unsupported architecture"
+ #endif
+ 
++#ifdef __SWITCH__
++    cvnx_write_code(target_func_u8, patch_bytes, offset);
++#else
+     protect(target_func_u8, old_flags);
++#endif
+ }
+ 
+ void unpatch_func(void* target_func, const recomp::mods::PatchData& data) {
++#ifdef __SWITCH__
++    cvnx_write_code(target_func, data.replaced_bytes.data(), data.replaced_bytes.size());
++#else
+     uint64_t old_flags;
+     unprotect(target_func, &old_flags);
+     memcpy(target_func, data.replaced_bytes.data(), data.replaced_bytes.size());
+     protect(target_func, old_flags);
++#endif
+ }
+ 
+ void recomp::mods::ModContext::add_opened_mod(ModManifest&& manifest, ConfigStorage&& config_storage, std::vector<size_t>&& game_indices, std::vector<ModContentTypeId>&& detected_content_types, std::vector<char>&& thumbnail) {
+diff --git a/librecomp/src/recomp.cpp b/librecomp/src/recomp.cpp
+index e6c40f9..37c30e5 100644
+--- a/librecomp/src/recomp.cpp
++++ b/librecomp/src/recomp.cpp
+@@ -544,8 +544,13 @@ void run_thread_function(uint8_t* rdram, uint64_t addr, uint64_t sp, uint64_t ar
+     }, &call, &fault);
+     if (!completed) {
+         // pc_off is the offset into the faulting library, for addr2line on its unstripped build.
++#ifdef __SWITCH__
++        struct { const char* dli_fname; const char* dli_sname; uintptr_t dli_fbase; } dl{};
++        const bool have_dl = false;
++#else
+         Dl_info dl{};
+         const bool have_dl = fault.pc != 0 && dladdr((void*)fault.pc, &dl) != 0;
++#endif
+         fprintf(stderr, "[recomp] fault caught: thread_entry=0x%08X sig=%d addr=0x%p pc=0x%p pc_off=0x%llX lib=%s sym=%s\n", (uint32_t)addr, fault.signo, (void*)fault.addr, (void*)fault.pc,
+                 have_dl ? (unsigned long long)(fault.pc - (uintptr_t)dl.dli_fbase) : 0ull, (have_dl && dl.dli_fname) ? dl.dli_fname : "?", (have_dl && dl.dli_sname) ? dl.dli_sname : "?");
+         fflush(stderr);
+@@ -936,6 +941,11 @@ void recomp::start(const recomp::Configuration& cfg) {
+     ultramodern::join_event_threads();
+     ultramodern::join_thread_cleaner_thread();
+     ultramodern::join_saving_thread();
++#if defined(__SWITCH__)
++    // Ends the mod configuration thread, as the static destructor would: the Switch build leaves through _exit
++    // (switch/main_switch.cpp).
++    mod_context.reset();
++#endif
+     
+     // Free rdram.
+     bool free_failed;
+diff --git a/thirdparty/concurrentqueue/lightweightsemaphore.h b/thirdparty/concurrentqueue/lightweightsemaphore.h
+index 41ba094..30af8fd 100644
+--- a/thirdparty/concurrentqueue/lightweightsemaphore.h
++++ b/thirdparty/concurrentqueue/lightweightsemaphore.h
+@@ -24,7 +24,7 @@ extern "C" {
+ }
+ #elif defined(__MACH__)
+ #include <mach/mach.h>
+-#elif defined(__unix__)
++#elif defined(__unix__) || defined(__SWITCH__)
+ #include <semaphore.h>
+ 
+ #if defined(__GLIBC_PREREQ) && defined(_GNU_SOURCE)
+@@ -165,7 +165,7 @@ public:
+ 		}
+ 	}
+ };
+-#elif defined(__unix__)
++#elif defined(__unix__) || defined(__SWITCH__)
+ //---------------------------------------------------------
+ // Semaphore (POSIX, Linux)
+ //---------------------------------------------------------
+diff --git a/ultramodern/include/ultramodern/renderer_context.hpp b/ultramodern/include/ultramodern/renderer_context.hpp
+index f43e843..933860f 100644
+--- a/ultramodern/include/ultramodern/renderer_context.hpp
++++ b/ultramodern/include/ultramodern/renderer_context.hpp
+@@ -54,7 +54,7 @@ namespace ultramodern {
+             auto operator<=>(const WindowHandle&) const = default;
+         };
+ // TODO add a native window handle option here (Display/Window for x11 and ANativeWindow for Android) as a compile-time option.
+-#elif defined(__linux__) || defined(__ANDROID__)
++#elif defined(__linux__) || defined(__ANDROID__) || defined(__SWITCH__)
+         using WindowHandle = SDL_Window*;
+ #elif defined(__APPLE__)
+         struct WindowHandle {
+diff --git a/ultramodern/include/ultramodern/ultramodern.hpp b/ultramodern/include/ultramodern/ultramodern.hpp
+index 9b8b9dd..4c5984f 100644
+--- a/ultramodern/include/ultramodern/ultramodern.hpp
++++ b/ultramodern/include/ultramodern/ultramodern.hpp
+@@ -164,6 +164,14 @@ void quit();
+ void join_event_threads();
+ void join_thread_cleaner_thread();
+ void join_saving_thread();
++// Switch: the .nro returns to the homebrew loader, which reuses this process and unmaps the code, so no thread may
++// outlive the game. Ends every game thread and the timer thread, joins them (which unmaps their stacks) and returns
++// how many did not end. Each thread ends itself where it waits (exit_thread_if_stopping): Horizon cannot end
++// another thread, and the recompiled frames above it are not unwound.
++int stop_game_threads();
++void exit_thread_if_stopping();
++bool stop_thread(std::thread& thread);
++bool stop_timer_thread();
+ 
+ void set_audio_callbacks(const audio_callbacks_t& callbacks);
+ 
+diff --git a/ultramodern/src/error_handling.cpp b/ultramodern/src/error_handling.cpp
+index 8ca779e..f415d72 100644
+--- a/ultramodern/src/error_handling.cpp
++++ b/ultramodern/src/error_handling.cpp
+@@ -21,7 +21,7 @@ void ultramodern::error_handling::message_box(const char* msg) {
+ void ultramodern::error_handling::quick_exit(const char* filename, int line, const char *func, int exit_status) {
+     fprintf(stderr, "Exiting with exit status '%i'. Function %s, at file %s:%i\n", exit_status, func, filename, line);
+ 
+-#ifdef __APPLE__
++#if defined(__APPLE__) || defined(__SWITCH__)
+     std::_Exit(exit_status);
+ #else
+     std::quick_exit(exit_status);
+diff --git a/ultramodern/src/events.cpp b/ultramodern/src/events.cpp
+index ad66a01..aca10ec 100644
+--- a/ultramodern/src/events.cpp
++++ b/ultramodern/src/events.cpp
+@@ -61,6 +61,10 @@ extern "C" int rs64_gfx_parse_inflight_wait(int ms) {
+ 
+ #include "ultramodern/rsp.hpp"
+ #include "ultramodern/renderer_context.hpp"
++#ifdef __SWITCH__
++#include <switch/types.h>
++#include <switch/arm/counter.h>
++#endif
+ 
+ static ultramodern::events::callbacks_t events_callbacks{};
+ 
+@@ -316,6 +320,36 @@ void ai_thread_func() {
+     }
+ }
+ 
++// ScreenUpdateActions enqueued but not yet taken by the gfx thread (Switch present skipping).
++static std::atomic_int pending_screen_updates{0};
++// Updates skipped that way since the start: VIs that showed nothing new (NX Options performance overlay).
++std::atomic<int> cvnx_dropped_screen_updates{0};
++
++#ifdef __SWITCH__
++// Waits for the display's vblank at 60 fps (interpolated); false when the timer paces the VI (switch/vsync_switch.cpp).
++extern "C" bool cvnx_wait_vsync();
++
++// A 60 fps display list is drawn twice (switch/render_gliden64.cpp). When the two passes outlast a VI, the screen
++// updates of the VIs that went by waited behind them and were presented back to back once both passes were done:
++// the display shows the last image presented before its vblank, so the first of the two was never seen (measured
++// in DK Isles at 1020 MHz: an in-between at 1353.2 ms, the real image at 1354.0, one vblank for both). Between the
++// passes the renderer presents the update that is due (cvnx_claim_screen_update); the queued action it stood for
++// is then skipped.
++static std::mutex latest_screen_regs_mutex;
++static ultramodern::renderer::ViRegs latest_screen_regs;
++static std::atomic_int screen_updates_presented_early{0};
++
++extern "C" bool cvnx_claim_screen_update() {
++    if (pending_screen_updates.load() <= screen_updates_presented_early.load()) return false;
++    {
++        std::lock_guard lock{latest_screen_regs_mutex};
++        events_context.vi.update_screen_regs = latest_screen_regs;
++    }
++    screen_updates_presented_early.fetch_add(1);
++    return true;
++}
++#endif
++
+ void vi_thread_func() {
+     ultramodern::set_native_thread_name("VI Thread");
+     // This thread should be prioritized over every other thread in the application, as it's what allows
+@@ -341,7 +375,13 @@ void vi_thread_func() {
+             // printf("Skipping the next VI wait\n");
+             next = std::chrono::high_resolution_clock::now();
+         }
++#ifdef __SWITCH__
++        if (!cvnx_wait_vsync()) {
++            ultramodern::sleep_until(next);
++        }
++#else
+         ultramodern::sleep_until(next);
++#endif
+         auto time_now = ultramodern::time_since_start();
+         // Calculate how many VIs have passed
+         uint64_t new_total_vis = (time_now * (60 * ultramodern::get_speed_multiplier()) / 1000ms) + 1;
+@@ -356,13 +396,38 @@ void vi_thread_func() {
+             set_dummy_vi(odd);
+             odd = !odd;
+         }
++#ifdef __SWITCH__
++        // The Switch build starts the game before the first VI (no launcher): until the game calls osViSetMode a VI
++        // state can have no mode yet, so give it the dummy one instead of reading through a null pointer.
++        else {
++            std::lock_guard lock{ events_context.message_mutex };
++            if (events_context.vi.get_next_state()->mode == nullptr) {
++                set_dummy_vi(false);
++            }
++        }
++#endif
+ 
++#ifdef __SWITCH__
++        // Switch: the screen update carries the registers of this VI (the buffer the N64 shows until the next one),
++        // queued before the display list the game builds after this retrace. Queued before the VI update, it showed
++        // each buffer one VI late, and DK64 (no RDP freeze) had already drawn its next frame into that buffer for the
++        // second VI: at 60 fps the real image of each frame was lost or its in-between came too early.
++        events_context.vi.update_vi();
++        {
++            std::lock_guard lock{latest_screen_regs_mutex};
++            latest_screen_regs = events_context.vi.regs;
++        }
++        pending_screen_updates.fetch_add(1);
++        events_context.action_queue.enqueue(ScreenUpdateAction{ events_context.vi.regs });
++#else
+         // Queue a screen update for the graphics thread with the current VI register state.
+         // Doing this before the VI update is equivalent to updating the screen after the previous frame's scanout finished.
++        pending_screen_updates.fetch_add(1);
+         events_context.action_queue.enqueue(ScreenUpdateAction{ events_context.vi.regs });
+ 
+         // Update VI registers and swap VI modes.
+         events_context.vi.update_vi();
++#endif
+ 
+         // DIAG-3: read first 4 bytes at VI ORIGIN to distinguish black/white/content
+         // framebuffers. If fb_first == 0x00010001, the VI is pointing at a
+@@ -661,6 +726,22 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
+             }
+             else if (const auto* screen_update_action = std::get_if<ScreenUpdateAction>(&action)) {
+                 events_context.vi.update_screen_regs = screen_update_action->regs;
++#ifdef __SWITCH__
++                // GLideN64 presents on this thread and blocks on vsync, so presenting every update drains
++                // this queue at exactly the VI rate: a backlog built during one slow display list (shader
++                // compiles) never shrinks, and moodycamel keeps serving the fuller VI producer while gfx
++                // tasks starve. Skip an
++                // update when a newer one is already queued behind it.
++                if (screen_updates_presented_early.load() > 0) {
++                    screen_updates_presented_early.fetch_sub(1);
++                    pending_screen_updates.fetch_sub(1);
++                    continue;
++                }
++                if (pending_screen_updates.fetch_sub(1) > 1) {
++                    cvnx_dropped_screen_updates.fetch_add(1);
++                    continue;
++                }
++#endif
+                 renderer_context->update_screen();
+                 display_refresh_rate = renderer_context->get_display_framerate();
+                 resolution_scale = renderer_context->get_resolution_scale();
+diff --git a/ultramodern/src/mesgqueue.cpp b/ultramodern/src/mesgqueue.cpp
+index ff27cd1..bfd0eb9 100644
+--- a/ultramodern/src/mesgqueue.cpp
++++ b/ultramodern/src/mesgqueue.cpp
+@@ -135,6 +135,7 @@ void dequeue_external_messages(RDRAM_ARG1) {
+ void ultramodern::wait_for_external_message(RDRAM_ARG1) {
+     QueuedMessage to_send;
+     external_messages.wait_dequeue(to_send);
++    ultramodern::exit_thread_if_stopping();
+     if (!do_send(PASS_RDRAM to_send.mq, to_send.mesg, to_send.jam, false) && to_send.requeue_if_blocked) {
+         external_messages.enqueue(to_send);
+     }
+@@ -143,6 +144,7 @@ void ultramodern::wait_for_external_message(RDRAM_ARG1) {
+ void ultramodern::wait_for_external_message_timed(RDRAM_ARG u32 millis) {
+     QueuedMessage to_send;
+     if (external_messages.wait_dequeue_timed(to_send, std::chrono::milliseconds{millis})) {
++        ultramodern::exit_thread_if_stopping();
+         if (!do_send(PASS_RDRAM to_send.mq, to_send.mesg, to_send.jam, false) && to_send.requeue_if_blocked) {
+             external_messages.enqueue(to_send);
+         }
+diff --git a/ultramodern/src/threads.cpp b/ultramodern/src/threads.cpp
+index 4b5fdb6..22ec934 100644
+--- a/ultramodern/src/threads.cpp
++++ b/ultramodern/src/threads.cpp
+@@ -1,7 +1,10 @@
++#include <atomic>
+ #include <cstdio>
+ #include <thread>
+ #include <cassert>
++#include <mutex>
+ #include <string>
++#include <vector>
+ #if defined(__GLIBC__)
+ #include <cxxabi.h>
+ #endif
+@@ -173,6 +176,78 @@ void ultramodern::set_native_thread_name(const std::string& name) {
+ }
+ 
+ void ultramodern::set_native_thread_priority(ThreadPriority pri) {}
++#elif defined(__SWITCH__)
++// Implemented in switch/threads_switch.c: names pick the core, priorities map to HOS priorities.
++extern "C" void cvnx_place_thread(const char* name);
++extern "C" void cvnx_set_thread_priority(int level);
++
++void ultramodern::set_native_thread_name(const std::string& name) {
++    cvnx_place_thread(name.c_str());
++}
++
++void ultramodern::set_native_thread_priority(ThreadPriority pri) {
++    cvnx_set_thread_priority(static_cast<int>(pri));
++}
++#endif
++
++#if defined(__SWITCH__)
++#include <pthread.h>
++
++extern "C" bool cvnx_wait_thread_exit(void* native_handle, uint64_t timeout_ns);
++
++static std::atomic_bool stopping_threads{false};
++static std::mutex live_contexts_mutex;
++static std::vector<UltraThreadContext*> live_contexts;
++constexpr uint64_t thread_stop_timeout_ns = 500'000'000;
++
++static void track_context(UltraThreadContext* context) {
++    std::lock_guard lock{live_contexts_mutex};
++    live_contexts.push_back(context);
++}
++
++static void untrack_context(UltraThreadContext* context) {
++    std::lock_guard lock{live_contexts_mutex};
++    std::erase(live_contexts, context);
++}
++
++void ultramodern::exit_thread_if_stopping() {
++    if (stopping_threads) {
++        pthread_exit(nullptr);
++    }
++}
++
++bool ultramodern::stop_thread(std::thread& thread) {
++    if (!thread.joinable()) {
++        return true;
++    }
++    if (!cvnx_wait_thread_exit(reinterpret_cast<void*>(thread.native_handle()), thread_stop_timeout_ns)) {
++        return false;
++    }
++    thread.join();
++    return true;
++}
++
++int ultramodern::stop_game_threads() {
++    stopping_threads = true;
++    std::lock_guard lock{live_contexts_mutex};
++    int left = 0;
++    for (UltraThreadContext* context : live_contexts) {
++        // Wakes the thread whether it waits to be resumed or for an external message.
++        context->running.signal();
++        ultramodern::enqueue_external_message(NULLPTR, NULLPTR, false, false);
++        if (!stop_thread(context->host_thread)) {
++            left++;
++        }
++    }
++    if (!stop_timer_thread()) {
++        left++;
++    }
++    return left;
++}
++#else
++static void track_context(UltraThreadContext*) {}
++static void untrack_context(UltraThreadContext*) {}
++void ultramodern::exit_thread_if_stopping() {}
+ #endif
+ 
+ [[noreturn]] static void end_deleted_thread(UltraThreadContext* cur_context);
+@@ -183,6 +258,7 @@ void wait_for_resumed(RDRAM_ARG UltraThreadContext* thread_context) {
+         std::abort();
+     }
+     thread_context->running.wait();
++    ultramodern::exit_thread_if_stopping();
+     // If this thread's context was replaced/deleted by another thread destroying
+     // us, terminate this host thread directly. The old path called
+     // osDestroyThread(NULL), which throws thread_terminated to unwind out to
+@@ -418,6 +494,7 @@ extern "C" void osCreateThread(RDRAM_ARG PTR(OSThread) t_, OSId id, PTR(thread_f
+     UltraThreadContext* context = new UltraThreadContext{};
+     t->context = context;
+     context->host_thread = std::thread{_thread_func, PASS_RDRAM t_, entrypoint, arg, t->context};
++    track_context(context);
+ 
+     // Wait until the thread is initialized to indicate that it's ready to be started.
+     context->initialized.wait();
+@@ -516,6 +593,7 @@ void thread_cleaner_func() {
+             debug_printf("[Cleanup] Deleting thread context %p\n", to_delete);
+ 
+             to_delete->host_thread.join();
++            untrack_context(to_delete);
+             delete to_delete;
+         }
+     }
+diff --git a/ultramodern/src/timer.cpp b/ultramodern/src/timer.cpp
+index 1a81693..6e471ec 100644
+--- a/ultramodern/src/timer.cpp
++++ b/ultramodern/src/timer.cpp
+@@ -99,6 +99,7 @@ void timer_thread(RDRAM_ARG1) {
+     
+     // Lambda to process a timer action to handle adding and removing timers
+     auto process_timer_action = [&](const Action& action) {
++        ultramodern::exit_thread_if_stopping();
+         // Determine the action type and act on it
+         if (const auto* add_action = std::get_if<AddTimerAction>(&action)) {
+             active_timers.insert(add_action->timer);
+@@ -152,9 +153,21 @@ void timer_thread(RDRAM_ARG1) {
+ 
+ void ultramodern::init_timers(RDRAM_ARG1) {
+     timer_context.thread = std::thread{ timer_thread, PASS_RDRAM1 };
++#if defined(__SWITCH__)
++    // Kept joinable: libnx never frees the stack of a detached thread (stop_timer_thread joins it).
++#else
+     timer_context.thread.detach();
++#endif
+ }
+ 
++#if defined(__SWITCH__)
++bool ultramodern::stop_timer_thread() {
++    // Any action wakes the thread, which then ends in process_timer_action.
++    timer_context.action_queue.enqueue(RemoveTimerAction{NULLPTR});
++    return ultramodern::stop_thread(timer_context.thread);
++}
++#endif
++
+ uint32_t ultramodern::get_speed_multiplier() {
+     return speed_multiplier();
+ }

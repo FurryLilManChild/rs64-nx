@@ -1,0 +1,223 @@
+// SDL GameController -> N64 pad for player 1. Each Switch button presses the N64 button chosen in NX Options >
+// Controls; the defaults follow the NSO N64 convention: A->A, B->B, ZL->Z, L->L, R/ZR->R, +->Start,
+// right stick->C buttons, D-pad->D-pad.
+#include <atomic>
+#include <cmath>
+#include <cstdint>
+
+#include <SDL.h>
+
+#include "nx_pad.h"
+#include "nx_settings.h"
+#include "recompinput/recompinput.h"
+#include "ultramodern/input.hpp"
+
+namespace {
+    constexpr uint16_t N64_A = 0x8000;
+    constexpr uint16_t N64_B = 0x4000;
+    constexpr uint16_t N64_Z = 0x2000;
+    constexpr uint16_t N64_START = 0x1000;
+    constexpr uint16_t N64_DPAD_UP = 0x0800;
+    constexpr uint16_t N64_DPAD_DOWN = 0x0400;
+    constexpr uint16_t N64_DPAD_LEFT = 0x0200;
+    constexpr uint16_t N64_DPAD_RIGHT = 0x0100;
+    constexpr uint16_t N64_L = 0x0020;
+    constexpr uint16_t N64_R = 0x0010;
+    constexpr uint16_t N64_C_UP = 0x0008;
+    constexpr uint16_t N64_C_DOWN = 0x0004;
+    constexpr uint16_t N64_C_LEFT = 0x0002;
+    constexpr uint16_t N64_C_RIGHT = 0x0001;
+
+    constexpr float AXIS_MAX = 32767.0f;
+    // Right-stick deflection that counts as a C-button press.
+    constexpr float C_BUTTON_THRESHOLD = 0.5f;
+    constexpr float STICK_DEADZONE = 0.1f;
+    constexpr uint16_t RUMBLE_STRENGTH = 0x6000;
+    // Re-armed on every VI while the game keeps rumble on, so a short duration stops it promptly.
+    constexpr uint32_t RUMBLE_PULSE_MS = 100;
+
+    std::atomic<SDL_GameController*> current_controller{nullptr};
+    std::atomic_bool rumble_on{false};
+    std::atomic_bool right_analog_suppressed{false};
+    NxStartFilter start_filter;  // game thread only
+
+    float read_axis(SDL_GameController* controller, SDL_GameControllerAxis axis) {
+        float value = SDL_GameControllerGetAxis(controller, axis) / AXIS_MAX;
+        return std::fabs(value) < STICK_DEADZONE ? 0.0f : value;
+    }
+
+    NxPad read_controller(SDL_GameController* controller) {
+        struct Binding { SDL_GameControllerButton button; uint32_t nx; };
+        static constexpr Binding bindings[] = {
+            {SDL_CONTROLLER_BUTTON_A, NX_A},
+            {SDL_CONTROLLER_BUTTON_B, NX_B},
+            {SDL_CONTROLLER_BUTTON_X, NX_X},
+            {SDL_CONTROLLER_BUTTON_Y, NX_Y},
+            {SDL_CONTROLLER_BUTTON_LEFTSHOULDER, NX_L},
+            {SDL_CONTROLLER_BUTTON_RIGHTSHOULDER, NX_R},
+            {SDL_CONTROLLER_BUTTON_START, NX_PLUS},
+            {SDL_CONTROLLER_BUTTON_BACK, NX_MINUS},
+            {SDL_CONTROLLER_BUTTON_DPAD_UP, NX_UP},
+            {SDL_CONTROLLER_BUTTON_DPAD_DOWN, NX_DOWN},
+            {SDL_CONTROLLER_BUTTON_DPAD_LEFT, NX_LEFT},
+            {SDL_CONTROLLER_BUTTON_DPAD_RIGHT, NX_RIGHT},
+            {SDL_CONTROLLER_BUTTON_LEFTSTICK, NX_LSTICK},
+            {SDL_CONTROLLER_BUTTON_RIGHTSTICK, NX_RSTICK},
+        };
+        NxPad pad;
+        for (const Binding& binding : bindings) {
+            if (SDL_GameControllerGetButton(controller, binding.button)) {
+                pad.buttons |= binding.nx;
+            }
+        }
+        // ZL/ZR are analog axes in SDL.
+        if (read_axis(controller, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > 0.5f) pad.buttons |= NX_ZL;
+        if (read_axis(controller, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 0.5f) pad.buttons |= NX_ZR;
+        // SDL's Y axes point down.
+        pad.lx = read_axis(controller, SDL_CONTROLLER_AXIS_LEFTX);
+        pad.ly = -read_axis(controller, SDL_CONTROLLER_AXIS_LEFTY);
+        pad.rx = read_axis(controller, SDL_CONTROLLER_AXIS_RIGHTX);
+        pad.ry = -read_axis(controller, SDL_CONTROLLER_AXIS_RIGHTY);
+        return pad;
+    }
+
+    // Index = choice of the Map* settings (N64_BUTTONS in nx_settings.cpp); 0 is Nothing.
+    constexpr uint16_t N64_BITS[] = {0, N64_A, N64_B, N64_Z, N64_L, N64_R, N64_START, N64_C_UP, N64_C_DOWN,
+                                     N64_C_LEFT, N64_C_RIGHT, N64_DPAD_UP, N64_DPAD_DOWN, N64_DPAD_LEFT, N64_DPAD_RIGHT};
+
+    uint16_t to_n64_buttons(const NxPad& pad) {
+        struct Binding { uint32_t nx; nx::Setting setting; };
+        static constexpr Binding bindings[] = {
+            {NX_A, nx::Setting::MapA}, {NX_B, nx::Setting::MapB}, {NX_X, nx::Setting::MapX}, {NX_Y, nx::Setting::MapY},
+            {NX_L, nx::Setting::MapL}, {NX_R, nx::Setting::MapR}, {NX_ZL, nx::Setting::MapZL}, {NX_ZR, nx::Setting::MapZR},
+            {NX_PLUS, nx::Setting::MapPlus}, {NX_MINUS, nx::Setting::MapMinus}, {NX_UP, nx::Setting::MapUp},
+            {NX_DOWN, nx::Setting::MapDown}, {NX_LEFT, nx::Setting::MapLeft}, {NX_RIGHT, nx::Setting::MapRight},
+            {NX_LSTICK, nx::Setting::MapLStick}, {NX_RSTICK, nx::Setting::MapRStick},
+        };
+        uint16_t buttons = 0;
+        for (const Binding& binding : bindings) {
+            if (pad.buttons & binding.nx) {
+                const int choice = nx::get(binding.setting);
+                if (choice > 0 && choice < static_cast<int>(sizeof(N64_BITS) / sizeof(N64_BITS[0]))) {
+                    buttons |= N64_BITS[choice];
+                }
+            }
+        }
+        const int stick = nx::get(nx::Setting::RightStick);  // 0 C buttons, 1 D-pad, 2 nothing
+        if (stick < 2) {
+            const bool c = stick == 0;
+            if (pad.rx < -C_BUTTON_THRESHOLD) buttons |= c ? N64_C_LEFT : N64_DPAD_LEFT;
+            if (pad.rx > C_BUTTON_THRESHOLD) buttons |= c ? N64_C_RIGHT : N64_DPAD_RIGHT;
+            if (pad.ry > C_BUTTON_THRESHOLD) buttons |= c ? N64_C_UP : N64_DPAD_UP;
+            if (pad.ry < -C_BUTTON_THRESHOLD) buttons |= c ? N64_C_DOWN : N64_DPAD_DOWN;
+        }
+        return buttons;
+    }
+
+    // The pad as the game sees it: neutral while the NX Options menu owns it.
+    bool read_game_pad(NxPad* pad) {
+        const bool connected = cvnx_read_pad(pad);
+        if (cvnx_menu_owns_pad()) {
+            *pad = NxPad{};
+        }
+        return connected;
+    }
+}
+
+#ifdef CVNX_REMOTE
+bool cvnx_remote_apply(NxPad* pad);
+#endif
+
+bool cvnx_read_pad(NxPad* pad) {
+    *pad = NxPad{};
+    SDL_GameController* controller = current_controller.load();
+    bool connected = controller != nullptr;
+    if (connected) {
+        *pad = read_controller(controller);
+    }
+#ifdef CVNX_REMOTE
+    connected = cvnx_remote_apply(pad) || connected;
+#endif
+    return connected;
+}
+
+// Called on the main thread, which owns the SDL event queue.
+void cvnx_input_handle_event(const SDL_Event& event) {
+    if (event.type == SDL_CONTROLLERDEVICEADDED && current_controller.load() == nullptr) {
+        current_controller.store(SDL_GameControllerOpen(event.cdevice.which));
+    }
+    else if (event.type == SDL_CONTROLLERDEVICEREMOVED) {
+        SDL_GameController* controller = current_controller.load();
+        if (controller != nullptr &&
+            SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller)) == event.cdevice.which) {
+            // ponytail: the handle is dropped, not closed, because the game thread may be reading it.
+            current_controller.store(nullptr);
+        }
+    }
+}
+
+bool cvnx_get_input(int controller_num, uint16_t* buttons, float* x, float* y) {
+    if (controller_num != 0) {
+        return false;
+    }
+    NxPad pad;
+    const bool connected = read_game_pad(&pad);
+    pad.buttons = start_filter.apply(pad.buttons, SDL_GetTicks64());
+    *buttons = to_n64_buttons(pad);
+    *x = pad.lx;
+    *y = pad.ly;
+    return connected;
+}
+
+ultramodern::input::connected_device_info_t cvnx_get_connected_device_info(int controller_num) {
+    if (controller_num == 0) {
+        // Rogue Squadron saves to the cartridge EEPROM; the Rumble Pak gives rumble.
+        return {ultramodern::input::Device::Controller, ultramodern::input::Pak::RumblePak};
+    }
+    return {ultramodern::input::Device::None, ultramodern::input::Pak::None};
+}
+
+// The main thread pumps SDL events every millisecond, so controller state is already fresh.
+void recompinput::poll_inputs() {}
+
+void recompinput::set_rumble(int controller_num, bool on) {
+    if (controller_num == 0) {
+        rumble_on.store(on);
+    }
+}
+
+void recompinput::update_rumble() {
+    SDL_GameController* controller = current_controller.load();
+    if (controller != nullptr && rumble_on.load()) {
+        SDL_GameControllerRumble(controller, RUMBLE_STRENGTH, RUMBLE_STRENGTH, RUMBLE_PULSE_MS);
+    }
+}
+
+void recompinput::get_gyro_deltas(int, float* x, float* y) {
+    *x = 0.0f;
+    *y = 0.0f;
+}
+
+void recompinput::get_mouse_deltas(float* x, float* y) {
+    *x = 0.0f;
+    *y = 0.0f;
+}
+
+void recompinput::get_right_analog(int controller_num, float* x, float* y) {
+    NxPad pad;
+    if (controller_num != 0 || right_analog_suppressed.load() || !read_game_pad(&pad)) {
+        *x = 0.0f;
+        *y = 0.0f;
+        return;
+    }
+    *x = pad.rx;
+    *y = pad.ry;
+}
+
+void recompinput::set_right_analog_suppressed(bool suppressed) {
+    right_analog_suppressed.store(suppressed);
+}
+
+bool recompinput::game_input_disabled() {
+    return false;
+}

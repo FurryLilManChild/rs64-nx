@@ -1,0 +1,17 @@
+# N64Recomp config for the patches ELF that CMakeLists.txt builds from patches/src (paths are relative to this file).
+[input]
+elf_path = "patches/patches.elf"
+output_func_path = "RecompiledPatches"
+single_file_output = true
+output_binary_path = "patches/patches.bin"
+use_absolute_symbols = true
+unpaired_lo16_warnings = false
+allow_exports = true
+# A patch naming a function that doesn't exist (renamed, typo) fails the build.
+strict_patch_mode = true
+
+func_reference_syms_file = "syms/rogue_squadron.syms.toml"
+# The mods variant: patches run in the relocated game, so they see the co-op fields at their host RAM addresses.
+data_reference_syms_files = [
+    "syms/rogue_squadron.datasyms.toml",
+]

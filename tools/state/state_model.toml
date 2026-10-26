@@ -1,0 +1,214 @@
+# Canonical game-state model. Single source of truth for classification, forcing,
+# and validation. Consumed by tools/state/gen_state_table.cpp (-> src/game/state_table.inl, at build time)
+# and read directly by the Python validation tools. USA v1.0 addresses only.
+#
+# classify predicate op: eq | ne | range (value..value_hi) | flag ((mem & mask) == value).
+# The host reads a big-endian u32 starting at `addr`; use mask to isolate a byte lane
+# (byte field at address A: addr=A, mask=0xFF000000, value=byteval<<24).
+#
+# Predicates below are calibrated against a live in-mission RDRAM capture + the boot trace
+# Struct fields per docs/data-structures.md:
+#   gGameSettings @0x80130B40: +0x00 currentLevel(u8), +0x01 vehicleId(u8), +0x10 flags(u32; bit0x20=demo active)
+#   gMissionState @0x80130B10: +0x00 numLives(u8), +0x07 numMissionObjectives(u8)
+#   gCurrentCutsceneFile ptr @0x800B1904 (valid KSEG0 only while a cutscene is loaded)
+
+[[state]]
+id = "cinematic"
+name = "Cinematic / cutscene"
+parent = ""
+# An active cinematic state machine: cineStatePtr (0x800B0934) is a valid KSEG0 pointer.
+# (gCurrentCutsceneFile is NOT used -- it is also valid behind the main menu's background.)
+classify = [ { addr = 0x800B0934, mask = 0xFFFFFFFF, op = "range", value = 0x80000000, value_hi = 0x807FFFFF } ]
+focus = ["cineStatePtr", "gCurrentCutsceneFile", "gateCtr"]
+
+[[state]]
+id = "menu"
+name = "Front-end menu"
+parent = ""
+# A menu is resident: gCurrentMenuData's first field (0x800CE730) is a valid KSEG0 pointer.
+classify = [ { addr = 0x800CE730, mask = 0xFFFFFFFF, op = "range", value = 0x80000000, value_hi = 0x807FFFFF } ]
+reachable_from = ["cinematic", "menu"]
+focus = ["gCurrentMenuData", "gGameSettings"]
+
+# Front-end menu sub-pages: menu id at gCurrentMenuData+0x04 (0x800CE734, u8), enum from
+# src/game/menu_config.cpp FrontMenu. Each also requires the menu pointer-valid guard so it
+# can't match at boot (where the field is 0 == MENU_MAIN). Children (depth 1) beat the
+# "menu" parent when matched.
+
+[[state]]
+id = "menu.main"
+name = "Main menu"
+parent = "menu"
+classify = [
+  { addr = 0x800CE730, mask = 0xFFFFFFFF, op = "range", value = 0x80000000, value_hi = 0x807FFFFF },
+  { addr = 0x800CE734, mask = 0xFF000000, op = "eq", value = 0x00000000 },
+]
+focus = ["gCurrentMenuData"]
+
+[[state]]
+id = "menu.account"
+name = "Select game / account"
+parent = "menu"
+classify = [
+  { addr = 0x800CE730, mask = 0xFFFFFFFF, op = "range", value = 0x80000000, value_hi = 0x807FFFFF },
+  { addr = 0x800CE734, mask = 0xFF000000, op = "eq", value = 0x01000000 },
+]
+focus = ["gCurrentMenuData", "gGameSettings"]
+
+# Account/select-game sub-steps: all share menuId=1 and the same menu ptr; the sub-step
+# index is a distinct global at 0x800CE626 (0=enter name, 1=select level, 2=available craft).
+# Guarded by the account id so they only match inside the pilot flow.
+
+[[state]]
+id = "menu.account.enter_name"
+name = "Enter name"
+parent = "menu.account"
+classify = [
+  { addr = 0x800CE730, mask = 0xFFFFFFFF, op = "range", value = 0x80000000, value_hi = 0x807FFFFF },
+  { addr = 0x800CE734, mask = 0xFF000000, op = "eq", value = 0x01000000 },
+  { addr = 0x800CE626, mask = 0xFF000000, op = "eq", value = 0x00000000 },
+]
+focus = ["gCurrentMenuData", "gGameSettings"]
+
+[[state]]
+id = "menu.account.level_select"
+name = "Select level"
+parent = "menu.account"
+classify = [
+  { addr = 0x800CE730, mask = 0xFFFFFFFF, op = "range", value = 0x80000000, value_hi = 0x807FFFFF },
+  { addr = 0x800CE734, mask = 0xFF000000, op = "eq", value = 0x01000000 },
+  { addr = 0x800CE626, mask = 0xFF000000, op = "eq", value = 0x01000000 },
+]
+focus = ["gCurrentMenuData", "gGameSettings"]
+
+[[state]]
+id = "menu.account.craft_select"
+name = "Available craft"
+parent = "menu.account"
+classify = [
+  { addr = 0x800CE730, mask = 0xFFFFFFFF, op = "range", value = 0x80000000, value_hi = 0x807FFFFF },
+  { addr = 0x800CE734, mask = 0xFF000000, op = "eq", value = 0x01000000 },
+  { addr = 0x800CE626, mask = 0xFF000000, op = "eq", value = 0x02000000 },
+]
+focus = ["gCurrentMenuData", "gGameSettings"]
+
+[[state]]
+id = "menu.options"
+name = "Options"
+parent = "menu"
+classify = [
+  { addr = 0x800CE730, mask = 0xFFFFFFFF, op = "range", value = 0x80000000, value_hi = 0x807FFFFF },
+  { addr = 0x800CE734, mask = 0xFF000000, op = "eq", value = 0x02000000 },
+]
+focus = ["gCurrentMenuData"]
+
+[[state]]
+id = "menu.game_settings"
+name = "Game settings"
+parent = "menu"
+classify = [
+  { addr = 0x800CE730, mask = 0xFFFFFFFF, op = "range", value = 0x80000000, value_hi = 0x807FFFFF },
+  { addr = 0x800CE734, mask = 0xFF000000, op = "eq", value = 0x03000000 },
+]
+focus = ["gCurrentMenuData", "gGameSettings"]
+
+[[state]]
+id = "menu.elite_rogues"
+name = "Elite Rogues"
+parent = "menu"
+classify = [
+  { addr = 0x800CE730, mask = 0xFFFFFFFF, op = "range", value = 0x80000000, value_hi = 0x807FFFFF },
+  { addr = 0x800CE734, mask = 0xFF000000, op = "eq", value = 0x04000000 },
+]
+focus = ["gCurrentMenuData"]
+
+[[state]]
+id = "menu.controller_settings"
+name = "Controller settings"
+parent = "menu"
+classify = [
+  { addr = 0x800CE730, mask = 0xFFFFFFFF, op = "range", value = 0x80000000, value_hi = 0x807FFFFF },
+  { addr = 0x800CE734, mask = 0xFF000000, op = "eq", value = 0x05000000 },
+]
+focus = ["gCurrentMenuData"]
+
+[[state]]
+id = "menu.sound_settings"
+name = "Sound settings"
+parent = "menu"
+classify = [
+  { addr = 0x800CE730, mask = 0xFFFFFFFF, op = "range", value = 0x80000000, value_hi = 0x807FFFFF },
+  { addr = 0x800CE734, mask = 0xFF000000, op = "eq", value = 0x06000000 },
+]
+focus = ["gCurrentMenuData"]
+
+[[state]]
+id = "menu.passcodes"
+name = "Passcodes"
+parent = "menu"
+classify = [
+  { addr = 0x800CE730, mask = 0xFFFFFFFF, op = "range", value = 0x80000000, value_hi = 0x807FFFFF },
+  { addr = 0x800CE734, mask = 0xFF000000, op = "eq", value = 0x07000000 },
+]
+focus = ["gCurrentMenuData"]
+
+[[state]]
+id = "menu.biographies"
+name = "Biographies"
+parent = "menu"
+classify = [
+  { addr = 0x800CE730, mask = 0xFFFFFFFF, op = "range", value = 0x80000000, value_hi = 0x807FFFFF },
+  { addr = 0x800CE734, mask = 0xFF000000, op = "eq", value = 0x08000000 },
+]
+focus = ["gCurrentMenuData"]
+
+# Media/extras hub (SHOWROOM / CONCERT HALL / AT THE MOVIES), menu id 10; showroom (model
+# viewer) is id 11. Concert Hall / At the Movies not yet mapped -- navigating there crashed
+# (STL vector subscript OOB, separate render bug).
+[[state]]
+id = "menu.media"
+name = "Media hub (Showroom/Concert Hall/Movies)"
+parent = "menu"
+classify = [
+  { addr = 0x800CE730, mask = 0xFFFFFFFF, op = "range", value = 0x80000000, value_hi = 0x807FFFFF },
+  { addr = 0x800CE734, mask = 0xFF000000, op = "eq", value = 0x0A000000 },
+]
+focus = ["gCurrentMenuData"]
+
+[[state]]
+id = "menu.media.showroom"
+name = "Showroom (model viewer)"
+parent = "menu.media"
+classify = [
+  { addr = 0x800CE730, mask = 0xFFFFFFFF, op = "range", value = 0x80000000, value_hi = 0x807FFFFF },
+  { addr = 0x800CE734, mask = 0xFF000000, op = "eq", value = 0x0B000000 },
+]
+focus = ["gCurrentMenuData"]
+
+[[state]]
+id = "mission"
+name = "In-mission (player)"
+parent = ""
+classify = [
+  { addr = 0x80130B17, mask = 0xFF000000, op = "ne",   value = 0x00000000 },   # numMissionObjectives != 0
+  { addr = 0x80130B50, mask = 0x00000020, op = "flag", value = 0x00000000 },   # gGameSettings+0x10 bit0x20 (demo) clear
+]
+force = { slot = "boot_level", params = { level = 0, craft = -1 } }
+reachable_from = ["menu", "cinematic"]
+focus = ["gMissionState", "gGameSettings", "gNpcSlotList..free"]
+
+[[state]]
+id = "attract.demo"
+name = "Attract demo"
+parent = ""
+classify = [
+  { addr = 0x80130B17, mask = 0xFF000000, op = "ne",   value = 0x00000000 },   # gameplay active (objectives set)
+  { addr = 0x80130B50, mask = 0x00000020, op = "flag", value = 0x00000020 },   # demo bit set
+]
+force = { slot = "demo", params = { demo = 0 } }
+reachable_from = ["menu"]
+focus = ["gMissionState", "gGameSettings"]
+
+# NOTE: front-menu tree via menu id 0x800CE734; pilot flow sub-steps via 0x800CE626
+# (0=name,1=level,2=craft), all verified against live captures. Still unmapped: the "show
+# room" and "music hall" screens (fall through to bare "menu"; need a capture there).

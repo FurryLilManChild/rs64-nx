@@ -1,0 +1,11 @@
+{
+  "game_id": "rs64",
+  "id": "menu-example",
+  "display_name": "Menu Example",
+  "description": "Example: a self-contained mod that adds its own custom menu page. A submenu button on the main menu opens a page of its own entries, backed by this mod's native library plus a built-in behavior.",
+  "version": "1.0.0",
+  "authors": ["RogueSquadron64Recomp"],
+  "minimum_recomp_version": "0.0.0",
+  "enabled_by_default": false,
+  "native_libraries": { "menu_example": ["example_hello", "example_flag", "example_flag_get"] }
+}

@@ -1,0 +1,18 @@
+[submodule "lib/N64ModernRuntime"]
+	path = lib/N64ModernRuntime
+	url = https://github.com/MikeSemicolonD/N64ModernRuntime.git
+[submodule "lib/rt64"]
+	path = lib/rt64
+	url = https://github.com/MikeSemicolonD/rt64.git
+[submodule "lib/enet6"]
+	path = mods/multiplayer-native/lib/enet6
+	url = https://github.com/SirLynix/enet6.git
+[submodule "lib/miniupnp"]
+	path = mods/multiplayer-native/lib/miniupnp
+	url = https://github.com/miniupnp/miniupnp.git
+[submodule "syms"]
+	path = syms
+	url = https://github.com/MikeSemicolonD/RogueSquadron64RecompSyms.git
+[submodule "lib/GLideN64"]
+	path = lib/GLideN64
+	url = https://github.com/gonetz/GLideN64

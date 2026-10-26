@@ -1,0 +1,11 @@
+{
+  "game_id": "rs64",
+  "id": "native-demo",
+  "display_name": "Native Demo",
+  "description": "Example: a native library provides a custom menu action, toggle, and slider, referenced from roguesq_menu.json as @exports.",
+  "version": "1.0.0",
+  "authors": ["RogueSquadron64Recomp"],
+  "minimum_recomp_version": "0.0.0",
+  "enabled_by_default": false,
+  "native_libraries": { "native_demo": ["demo_action", "demo_toggle", "demo_toggle_get", "demo_slider", "demo_slider_get", "rs64_mod_init"] }
+}

@@ -1,0 +1,892 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build: RogueSquadron64Recomp (Debug)",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build", "build",
+                "--config", "Debug",
+                "--target", "RogueSquadron64Recomp"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": "$msCompile",
+            "detail": "Full relink of the game exe (tested config)."
+        },
+        {
+            "label": "Build: RogueSquadron64Recomp (Release)",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build", "build",
+                "--config", "Release",
+                "--target", "RogueSquadron64Recomp"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": "$msCompile",
+            "detail": "Release exe (unvalidated config). POST_BUILD assembles a clean build/dist/ with just the exe + DLLs + menu json. Needs a ClangCL cache: cmake -B build -T ClangCL. Copy rogue_squadron.z64 next to the exe to run."
+        },
+        {
+            "label": "Configure (Windows x86)",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-B", "build-x86",
+                "-G", "Visual Studio 17 2022", "-A", "Win32", "-T", "ClangCL",
+                "-DN64RECOMP_EXE=${workspaceFolder}/build/Debug/N64Recomp.exe"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "detail": "32-bit Windows tree in build-x86. Reuses the x64 build's N64Recomp.exe, so build the x64 Debug target first."
+        },
+        {
+            "label": "Build: RogueSquadron64Recomp (x86 Debug)",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build", "build-x86",
+                "--config", "Debug",
+                "--target", "RogueSquadron64Recomp"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": "$msCompile",
+            "detail": "32-bit Windows exe in build-x86/Debug. Copy rogue_squadron.z64 next to it to run."
+        },
+        {
+            "label": "Build: RogueSquadron64Recomp (x86 Release)",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build", "build-x86",
+                "--config", "Release",
+                "--target", "RogueSquadron64Recomp"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": "$msCompile",
+            "detail": "32-bit Windows Release; assembles build-x86/dist/."
+        },
+        {
+            "label": "Package: Bump version",
+            "type": "shell",
+            "command": "& .\\tools\\bump-version.ps1 -Part '${input:versionPart}'",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "shell": {
+                    "executable": "powershell.exe",
+                    "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
+                }
+            },
+            "problemMatcher": [],
+            "detail": "Raises the release version in VERSION (read by CMake, Gradle and the packaging scripts). For an exact number, edit VERSION or run tools/bump-version.ps1 -Set 1.2.3."
+        },
+        {
+            "label": "Package: Release bundle (all platforms)",
+            "type": "shell",
+            "command": "& .\\tools\\bundle-release.ps1 -OutDir '${input:releaseOutDir}' -Only '${input:releaseTargets}' -WslDistro '${input:wslDistro}'",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "shell": {
+                    "executable": "powershell.exe",
+                    "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
+                }
+            },
+            "problemMatcher": [],
+            "detail": "Builds Release for the chosen targets (Windows x64/x86, Linux x64/arm64/armhf/i386 through WSL, Android) and writes the zips, tarballs, AppImages, Flatpaks and APK to <folder>/v<VERSION>/ (default: your Desktop). Windows zips are staged fresh, so ROMs and saves in build*/dist never ship. Prints a table of what was built."
+        },
+        {
+            "label": "Run: Game (pick level / craft)",
+            "type": "shell",
+            "command": "$l = '${input:rsLevel}'; $c = '${input:rsCraft}'; $a = @(); if ($l -ne '') { $a += '--force-level', $l }; if ($c -ne '') { $a += '--force-craft', $c }; Write-Host \"RogueSquadron64Recomp.exe $a\"; & .\\RogueSquadron64Recomp.exe @a",
+            "options": {
+                "cwd": "${workspaceFolder}/build/${input:rsConfig}",
+                "shell": {
+                    "executable": "powershell.exe",
+                    "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
+                }
+            },
+            "problemMatcher": [],
+            "detail": "Launch the game with an optional forced level and/or craft (--force-level / --force-craft). You drive the menus; whatever mission you launch uses the forced values."
+        },
+        {
+            "label": "Record: Input recording (pick level / craft)",
+            "type": "shell",
+            "command": "& .\\tools\\recordings\\record.ps1 -Level ${input:rsRecLevel} -Craft '${input:rsCraft}' -Kind ${input:rsRecKind} -Name '${input:rsRecName}' -Config ${input:rsRecConfig}",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "shell": {
+                    "executable": "powershell.exe",
+                    "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
+                }
+            },
+            "problemMatcher": [],
+            "detail": "Record controller input into tools/recordings/<id>-<mission>/ (folder created if missing). Mission = lockstep .rec + .hash baseline, boots straight into the level; session = from launch with the level forced. Blank name = <mission>_<timestamp>."
+        },
+        {
+            "label": "Record: Co-op client recording (you fly player 2)",
+            "type": "shell",
+            "command": "& .\\tools\\recordings\\record-coop.ps1 -Level ${input:rsRecLevel} -Craft '${input:rsCraft}' -HostPad '${input:rsCoopHostPad}' -Name '${input:rsRecName}'",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "shell": {
+                    "executable": "powershell.exe",
+                    "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
+                }
+            },
+            "problemMatcher": [],
+            "detail": "Online co-op pair on localhost: the host (left) replays the level's solo recording (newest <mission>_<timestamp>.rec unless overridden), you fly the client (right) and your input is saved as <mission>_coop_client_<timestamp>.rec. Close the client window to stop. Craft None = the host recording's craft."
+        },
+        {
+            "label": "IDE: Refresh clangd compile database (Windows)",
+            "type": "shell",
+            "command": "$vs = 'C:/Program Files/Microsoft Visual Studio/2022/Community'; Import-Module \"$vs/Common7/Tools/Microsoft.VisualStudio.DevShell.dll\"; Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64' | Out-Null; cmake -S . -B build-ide -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "shell": {
+                    "executable": "powershell.exe",
+                    "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
+                }
+            },
+            "problemMatcher": [],
+            "detail": "Configure-only Ninja tree (build-ide/) that writes compile_commands.json for clangd. Never built; rerun after adding source files or changing CMakeLists. Generated RT64 shader headers come from build/src via .clangd."
+        },
+        {
+            "label": "IDE: Refresh Android clangd compile database",
+            "type": "shell",
+            "command": "$src = Get-ChildItem android/app/.cxx -Recurse -Filter compile_commands.json | Where-Object { $_.FullName -notmatch '[\\\\/]tools[\\\\/]' } | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if (-not $src) { Write-Host 'No Android compile database yet: run an Android build first.'; exit 1 }; New-Item -ItemType Directory -Force build-ide-android | Out-Null; Copy-Item $src.FullName build-ide-android/compile_commands.json -Force; Write-Host \"Copied $($src.FullName)\"",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "shell": {
+                    "executable": "powershell.exe",
+                    "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
+                }
+            },
+            "problemMatcher": [],
+            "detail": "Copies the newest NDK compile_commands.json from android/app/.cxx (its folder name is a hash that changes) to build-ide-android/, which .clangd uses for android_host.cpp."
+        },
+        {
+            "label": "Build: All mods",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}/tools/build-mods.ps1"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": "$msCompile",
+            "detail": "Builds every native mod (mods/<name>/CMakeLists.txt) separately from the game; each DLL lands beside its mod.json and the next game build copies mods/ next to the exe."
+        },
+        {
+            "label": "Regen: Recompiled Functions (funcs_*.c)",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build", "build",
+                "--config", "Debug",
+                "--target", "regen_funcs"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": "$msCompile",
+            "detail": "Regenerate RecompiledFuncs/ from rogue_squadron.toml (rebuilds N64RecompCLI first, reads ../rogue_squadron64/build/roguesquadron.elf, verifies the co-op relocation patches)."
+        },
+        {
+            "label": "Regen + Build: Recompiled Functions",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build", "build",
+                "--config", "Debug",
+                "--target", "RecompiledFuncs"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": "$msCompile",
+            "dependsOn": "Regen: Recompiled Functions (funcs_*.c)",
+            "dependsOrder": "sequence",
+            "detail": "Regenerate funcs_*.c then compile the RecompiledFuncs target."
+        },
+        {
+            "label": "Test: Unit tests",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build", "build",
+                "--config", "${input:rsConfig}",
+                "--target", "rs64_unit_tests"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "problemMatcher": "$msCompile",
+            "detail": "Builds and runs rs64_unit_tests: lockstep_core, mp_core, net_core, net_link, nav_target, host_api, cable_alias, crosshair_match, rs64_lights, then the style checker."
+        },
+        {
+            "label": "Test: Standalone test",
+            "type": "shell",
+            "command": "cmake --build build --config ${input:rsConfig} --target ${input:rsTest}; if ($?) { & \"build/${input:rsConfig}/${input:rsTest}.exe\" }",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "shell": {
+                    "executable": "powershell.exe",
+                    "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
+                }
+            },
+            "group": "test",
+            "problemMatcher": "$msCompile",
+            "detail": "Builds and runs one of the EXCLUDE_FROM_ALL tests that rs64_unit_tests does not cover."
+        },
+        {
+            "label": "Configure (Linux/WSL)",
+            "type": "process",
+            "command": "wsl.exe",
+            "args": [
+                "-d", "${input:wslDistro}",
+                "-e", "bash", "-lc",
+                "cd \"$(wslpath '${workspaceFolder}')\" && cmake -S . -B \"$HOME/rs64-build\" -G Ninja -DCMAKE_BUILD_TYPE=Debug"
+            ],
+            "group": "build",
+            "problemMatcher": [],
+            "detail": "Configure a Linux build in the selected WSL distro. Build tree lives on the distro's ext4 home ($HOME/rs64-build); source stays on the Windows drive. Uses Ninja + the distro's default gcc/clang. The pre-generated RecompiledFuncs/ucode are reused."
+        },
+        {
+            "label": "Build (Linux/WSL): RogueSquadron64Recomp",
+            "type": "process",
+            "command": "wsl.exe",
+            "args": [
+                "-d", "${input:wslDistro}",
+                "-e", "bash", "-lc",
+                "cd \"$(wslpath '${workspaceFolder}')\" && cmake --build \"$HOME/rs64-build\" --target RogueSquadron64Recomp -j\"$(nproc)\""
+            ],
+            "group": "build",
+            "problemMatcher": {
+                "owner": "gcc",
+                "fileLocation": ["autoDetect", "${workspaceFolder}"],
+                "pattern": {
+                    "regexp": "^(.*?):(\\d+):(\\d*):?\\s+(?:fatal\\s+)?(warning|error):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
+                }
+            },
+            "dependsOn": "Configure (Linux/WSL)",
+            "dependsOrder": "sequence",
+            "detail": "Configure then build the native Linux exe in the selected WSL distro. Output: ~/rs64-build/RogueSquadron64Recomp (ELF x86-64). Requires: build-essential cmake ninja-build libsdl2-dev libvulkan-dev libgtk-3-dev python3 zip gcc-mips-linux-gnu binutils-mips-linux-gnu (configure with -DMIPS_GCC=/usr/bin/mips-linux-gnu-gcc -DMIPS_LD=/usr/bin/mips-linux-gnu-ld)."
+        },
+        {
+            "label": "Configure (Linux/WSL, Release)",
+            "type": "process",
+            "command": "wsl.exe",
+            "args": [
+                "-d", "${input:wslDistro}",
+                "-e", "bash", "-lc",
+                "cd \"$(wslpath '${workspaceFolder}')\" && cmake -S . -B \"$HOME/rs64-build-release\" -G Ninja -DCMAKE_BUILD_TYPE=Release"
+            ],
+            "group": "build",
+            "problemMatcher": [],
+            "detail": "Configure a Linux Release build in the selected WSL distro. Separate build tree ($HOME/rs64-build-release) so it does not clobber the Debug one. Ninja + the distro's default gcc/clang; pre-generated RecompiledFuncs/ucode reused."
+        },
+        {
+            "label": "Build (Linux/WSL, Release): RogueSquadron64Recomp",
+            "type": "process",
+            "command": "wsl.exe",
+            "args": [
+                "-d", "${input:wslDistro}",
+                "-e", "bash", "-lc",
+                "cd \"$(wslpath '${workspaceFolder}')\" && cmake --build \"$HOME/rs64-build-release\" --target RogueSquadron64Recomp -j\"$(nproc)\""
+            ],
+            "group": "build",
+            "problemMatcher": {
+                "owner": "gcc",
+                "fileLocation": ["autoDetect", "${workspaceFolder}"],
+                "pattern": {
+                    "regexp": "^(.*?):(\\d+):(\\d*):?\\s+(?:fatal\\s+)?(warning|error):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
+                }
+            },
+            "dependsOn": "Configure (Linux/WSL, Release)",
+            "dependsOrder": "sequence",
+            "detail": "Configure then build the native Linux Release exe in the selected WSL distro. Output: ~/rs64-build-release/RogueSquadron64Recomp (ELF x86-64). Requires: build-essential cmake ninja-build libsdl2-dev libvulkan-dev libgtk-3-dev python3 zip gcc-mips-linux-gnu binutils-mips-linux-gnu (configure with -DMIPS_GCC=/usr/bin/mips-linux-gnu-gcc -DMIPS_LD=/usr/bin/mips-linux-gnu-ld)."
+        },
+        {
+            "label": "Test (WSL): Unit tests",
+            "type": "process",
+            "command": "wsl.exe",
+            "args": [
+                "-d", "${input:wslDistro}",
+                "-e", "bash", "-lc",
+                "cd \"$(wslpath '${workspaceFolder}')\" && d=\"$HOME/${input:wslBuildDir}\" && if [ ! -d \"$d\" ]; then echo \"No build tree at $d: run the matching Configure (Linux/WSL) task first.\"; exit 1; fi && cmake --build \"$d\" --target rs64_unit_tests -j\"$(nproc)\""
+            ],
+            "group": "test",
+            "problemMatcher": {
+                "owner": "gcc",
+                "fileLocation": ["autoDetect", "${workspaceFolder}"],
+                "pattern": {
+                    "regexp": "^(.*?):(\\d+):(\\d*):?\\s+(?:fatal\\s+)?(warning|error):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
+                }
+            },
+            "detail": "Builds and runs rs64_unit_tests in the selected WSL distro's Linux build tree (unit tests + style checker)."
+        },
+        {
+            "label": "Test (WSL): Standalone test",
+            "type": "process",
+            "command": "wsl.exe",
+            "args": [
+                "-d", "${input:wslDistro}",
+                "-e", "bash", "-lc",
+                "cd \"$(wslpath '${workspaceFolder}')\" && d=\"$HOME/${input:wslBuildDir}\" && if [ ! -d \"$d\" ]; then echo \"No build tree at $d: run the matching Configure (Linux/WSL) task first.\"; exit 1; fi && cmake --build \"$d\" --target ${input:wslTest} -j\"$(nproc)\" && \"$d/${input:wslTest}\""
+            ],
+            "group": "test",
+            "problemMatcher": {
+                "owner": "gcc",
+                "fileLocation": ["autoDetect", "${workspaceFolder}"],
+                "pattern": {
+                    "regexp": "^(.*?):(\\d+):(\\d*):?\\s+(?:fatal\\s+)?(warning|error):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
+                }
+            },
+            "detail": "Builds and runs one EXCLUDE_FROM_ALL test in the WSL Linux build tree, including the POSIX-only fault_guard_test."
+        },
+        {
+            "label": "Package (Linux/WSL, Release bundle)",
+            "type": "process",
+            "command": "wsl.exe",
+            "args": [
+                "-d", "${input:wslDistro}",
+                "-e", "bash", "-lc",
+                "bash \"$(wslpath '${workspaceFolder}')/tools/package-linux.sh\" \"$HOME/rs64-linux-release.tar.xz\""
+            ],
+            "group": "build",
+            "problemMatcher": [],
+            "dependsOn": "Build (Linux/WSL, Release): RogueSquadron64Recomp",
+            "dependsOrder": "sequence",
+            "detail": "Build then package the Release exe into a stripped self-contained bundle (exe + app libs + run.sh launcher) at ~/rs64-linux-release.tar.xz. Excludes glibc core, the Vulkan loader, and the ROM (all host-provided). tools/package-linux.sh takes an output path arg; point it at /mnt/c/... to drop straight on Windows."
+        },
+        {
+            "label": "Test: Linux remotes (Raspberry Pi)",
+            "type": "process",
+            "command": "wsl.exe",
+            "args": [
+                "-d", "${input:wslDistro}",
+                "-e", "bash", "-lc",
+                "bash \"$(wslpath '${workspaceFolder}')/tools/linux/test-remote.sh\" '${input:linuxReleaseDir}' '${input:romPath}'"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "detail": "For every machine in ~/.config/rs64/remotes (WSL; lines '<name> <user>@<host> <remote-dir>'): detects arch/OS/glibc/Vulkan, deploys the matching RogueSquadron64Recomp-linux-<arch>-*.tar.xz, copies the ROM, runs --help and a headless boot in the logged-in desktop session, and pulls the logs back to logs/platform-tests/."
+        },
+        {
+            "label": "Linux: Copy build out of WSL",
+            "type": "process",
+            "command": "wsl.exe",
+            "args": [
+                "-d", "${input:wslDistro}",
+                "-e", "bash", "-lc",
+                "bash \"$(wslpath '${workspaceFolder}')/tools/linux/export-build.sh\" '${input:linuxBuildDir}' '${input:linuxExportDir}'"
+            ],
+            "problemMatcher": [],
+            "detail": "Packages a WSL build tree (x64 or arm64, detected) into <folder>/rs64-linux-<arch>.tar.xz: exe, libs, run.sh and mods. A tarball keeps the execute bits a copy through a Windows folder loses."
+        },
+        {
+            "label": "Linux: Deploy build to remote machine",
+            "type": "process",
+            "command": "wsl.exe",
+            "args": [
+                "-d", "${input:wslDistro}",
+                "-e", "bash", "-lc",
+                "bash \"$(wslpath '${workspaceFolder}')/tools/linux/deploy-remote.sh\" '${input:linuxPackage}' '${input:remoteUser}' '${input:remoteHost}' '${input:remoteDir}'"
+            ],
+            "problemMatcher": [],
+            "detail": "Streams a rs64-linux-<arch>.tar.xz (or an .AppImage/other file) to user@host over one ssh connection and unpacks it into the remote folder. ssh asks for the password in this terminal unless a key is set up."
+        },
+        {
+            "label": "Linux: Copy ROM to remote machine",
+            "type": "process",
+            "command": "wsl.exe",
+            "args": [
+                "-d", "${input:wslDistro}",
+                "-e", "bash", "-lc",
+                "bash \"$(wslpath '${workspaceFolder}')/tools/linux/deploy-remote.sh\" '${input:romPath}' '${input:remoteUser}' '${input:remoteHost}' '${input:remoteDir}'"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "detail": "Copies the ROM into the remote folder next to run.sh. ssh asks for the password in this terminal unless a key is set up."
+        },
+        {
+            "label": "Build (Linux cross, WSL): tarball + AppImage",
+            "type": "process",
+            "command": "wsl.exe",
+            "args": [
+                "-d", "${input:wslDistro}",
+                "-e", "bash", "-lc",
+                "bash \"$(wslpath '${workspaceFolder}')/tools/linux/cross-build.sh\" ${input:crossArch} Release \"$(wslpath '${workspaceFolder}')/build/release\""
+            ],
+            "group": "build",
+            "problemMatcher": {
+                "owner": "gcc",
+                "fileLocation": ["autoDetect", "${workspaceFolder}"],
+                "pattern": {
+                    "regexp": "^(.*?):(\\d+):(\\d*):?\\s+(?:fatal\\s+)?(warning|error):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
+                }
+            },
+            "detail": "arm64 (Raspberry Pi 64-bit OS), armhf (32-bit Pi OS, Pi 2+) or i386. Cross-compiles into ~/rs64-build-<arch>-release (build-time tools run under qemu-user), then writes the tarball, AppImage and, for arm64, Flatpak to build/release/. One-time packages: docs/building-all-platforms.md."
+        },
+        {
+            "label": "Build (macOS cross, WSL/osxcross): RogueSquadron64Recomp",
+            "type": "process",
+            "command": "wsl.exe",
+            "args": [
+                "-d", "${input:wslDistro}",
+                "-e", "bash", "-lc",
+                "bash \"$(wslpath '${workspaceFolder}')/tools/macos/cross-build.sh\" ${input:macArch} ${input:macConfig}"
+            ],
+            "group": "build",
+            "problemMatcher": {
+                "owner": "gcc",
+                "fileLocation": ["autoDetect", "${workspaceFolder}"],
+                "pattern": {
+                    "regexp": "^(.*?):(\\d+):(\\d*):?\\s+(?:fatal\\s+)?(warning|error):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
+                }
+            },
+            "detail": "Compile-only macOS cross-build via osxcross (~/osxcross/target). Builds host tools and SDL2 on first run, then configures + builds into ~/rs64-build-macos-<arch> (Release: ~/rs64-build-macos-<arch>-release). Metal shaders are embedded as MSL source (no xcrun off-Mac), so the binary links but cannot render."
+        },
+        {
+            "label": "Run (Linux/WSL, GPU via dzn)",
+            "type": "process",
+            "command": "wsl.exe",
+            "args": [
+                "-d", "${input:wslDistro}",
+                "-e", "bash", "-lc",
+                "bash \"$(wslpath '${workspaceFolder}')/tools/run-wsl-gpu.sh\""
+            ],
+            "group": "test",
+            "problemMatcher": [],
+            "detail": "Launch the Linux build interactively under WSLg: GPU Vulkan via Mesa Dozen (dzn -> D3D12 -> real GPU) + sound via PulseAudio + keyboard input. Click the window to focus. Keys: Arrows/WASD=stick, W/Enter=A, Space=B, Escape=Start, E=R, F4=L. Requires a one-time Mesa dzn build in ~/mesa-dzn (see project memory). For a headless smoke test add: --fake-controller --auto-start 8000."
+        },
+        {
+            "label": "Build (Android): APK (Debug)",
+            "type": "process",
+            "command": "${workspaceFolder}/android/gradlew.bat",
+            "args": ["assembleDebug", "--console=plain"],
+            "options": {
+                "cwd": "${workspaceFolder}/android",
+                "env": { "JAVA_HOME": "C:/Program Files/Android/Android Studio/jbr" }
+            },
+            "group": "build",
+            "problemMatcher": {
+                "owner": "gcc",
+                "fileLocation": ["autoDetect", "${workspaceFolder}"],
+                "pattern": {
+                    "regexp": "^(.*?):(\\d+):(\\d*):?\\s+(?:fatal\\s+)?(warning|error):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
+                }
+            },
+            "detail": "Gradle + NDK arm64 build of libmain.so/libSDL2.so into android/app/build/outputs/apk/debug/RogueSquadron64Recomp-debug.apk. Needs a prior Windows Debug build (generated RecompiledFuncs/ucode/state table + build/Debug/file_to_c.exe); CMake stops with a clear error if any are missing."
+        },
+        {
+            "label": "Install + Run (Android)",
+            "type": "shell",
+            "command": "& \"${env:LOCALAPPDATA}/Android/Sdk/platform-tools/adb.exe\" install -r app/build/outputs/apk/debug/RogueSquadron64Recomp-debug.apk; if ($?) { & \"${env:LOCALAPPDATA}/Android/Sdk/platform-tools/adb.exe\" shell am start -n com.rs64recomp.app/.MainActivity }",
+            "options": {
+                "cwd": "${workspaceFolder}/android",
+                "shell": { "executable": "powershell.exe", "args": ["-NoProfile", "-Command"] }
+            },
+            "group": "test",
+            "problemMatcher": [],
+            "dependsOn": "Build (Android): APK (Debug)",
+            "dependsOrder": "sequence",
+            "detail": "Build, install over USB/wireless adb, and launch. First time: push the ROM with 'Push ROM (Android)'. Watch output with 'Logcat (Android)'."
+        },
+        {
+            "label": "Build (Android): APK (Release)",
+            "type": "process",
+            "command": "${workspaceFolder}/android/gradlew.bat",
+            "args": ["assembleRelease", "--console=plain"],
+            "options": {
+                "cwd": "${workspaceFolder}/android",
+                "env": { "JAVA_HOME": "C:/Program Files/Android/Android Studio/jbr" }
+            },
+            "group": "build",
+            "problemMatcher": {
+                "owner": "gcc",
+                "fileLocation": ["autoDetect", "${workspaceFolder}"],
+                "pattern": {
+                    "regexp": "^(.*?):(\\d+):(\\d*):?\\s+(?:fatal\\s+)?(warning|error):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
+                }
+            },
+            "detail": "Optimized native build (the Debug APK is -O0 and stutters). Signed with the debug key, so it installs over the Debug APK and keeps the pushed ROM."
+        },
+        {
+            "label": "Install + Run (Android, Release)",
+            "type": "shell",
+            "command": "& \"${env:LOCALAPPDATA}/Android/Sdk/platform-tools/adb.exe\" install -r app/build/outputs/apk/release/RogueSquadron64Recomp-release.apk; if ($?) { & \"${env:LOCALAPPDATA}/Android/Sdk/platform-tools/adb.exe\" shell am start -n com.rs64recomp.app/.MainActivity }",
+            "options": {
+                "cwd": "${workspaceFolder}/android",
+                "shell": { "executable": "powershell.exe", "args": ["-NoProfile", "-Command"] }
+            },
+            "group": "test",
+            "problemMatcher": [],
+            "dependsOn": "Build (Android): APK (Release)",
+            "dependsOrder": "sequence",
+            "detail": "Build the Release APK, install it, and launch. Use this for performance testing."
+        },
+        {
+            "label": "Install (Android, Release)",
+            "type": "shell",
+            "command": "& \"${env:LOCALAPPDATA}/Android/Sdk/platform-tools/adb.exe\" install -r app/build/outputs/apk/release/RogueSquadron64Recomp-release.apk",
+            "options": {
+                "cwd": "${workspaceFolder}/android",
+                "shell": { "executable": "powershell.exe", "args": ["-NoProfile", "-Command"] }
+            },
+            "group": "test",
+            "problemMatcher": [],
+            "dependsOn": "Build (Android): APK (Release)",
+            "dependsOrder": "sequence",
+            "detail": "Build the Release APK and install it over USB/wireless adb without launching it."
+        },
+        {
+            "label": "Build + Install over USB (Android, Release)",
+            "type": "shell",
+            "command": "$adb = '${env:LOCALAPPDATA}/Android/Sdk/platform-tools/adb.exe'; if ((& $adb -d get-state 2>$null) -ne 'device') { Write-Host 'No USB device found: plug the phone in, enable USB debugging, and accept the RSA prompt.'; exit 1 }; & $adb -d install -r app/build/outputs/apk/release/RogueSquadron64Recomp-release.apk; if (-not $?) { exit 1 }; & $adb -d shell am start -n com.rs64recomp.app/.MainActivity",
+            "options": {
+                "cwd": "${workspaceFolder}/android",
+                "shell": { "executable": "powershell.exe", "args": ["-NoProfile", "-Command"] }
+            },
+            "group": "test",
+            "problemMatcher": [],
+            "dependsOn": "Build (Android): APK (Release)",
+            "dependsOrder": "sequence",
+            "detail": "Build the Release APK, install it on the phone connected over USB (adb -d, ignores wireless/emulator devices), and launch it."
+        },
+        {
+            "label": "Push ROM (Android)",
+            "type": "shell",
+            "command": "& \"${env:LOCALAPPDATA}/Android/Sdk/platform-tools/adb.exe\" shell mkdir -p /sdcard/Android/data/com.rs64recomp.app/files; & \"${env:LOCALAPPDATA}/Android/Sdk/platform-tools/adb.exe\" push build/Debug/rogue_squadron.z64 /sdcard/Android/data/com.rs64recomp.app/files/",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "shell": { "executable": "powershell.exe", "args": ["-NoProfile", "-Command"] }
+            },
+            "problemMatcher": [],
+            "detail": "Copies build/Debug/rogue_squadron.z64 into the app's files dir. Env vars for the game go in roguesq_env.txt (NAME=VALUE per line) in the same dir."
+        },
+        {
+            "label": "Logcat (Android)",
+            "type": "shell",
+            "command": "& \"${env:LOCALAPPDATA}/Android/Sdk/platform-tools/adb.exe\" logcat -v time RS64:V SDL:V DEBUG:V AndroidRuntime:E *:S",
+            "options": {
+                "shell": { "executable": "powershell.exe", "args": ["-NoProfile", "-Command"] }
+            },
+            "isBackground": true,
+            "problemMatcher": [],
+            "detail": "Game stdout/stderr (tag RS64), SDL, and native crash tombstones (DEBUG)."
+        }
+    ],
+    "inputs": [
+        {
+            "id": "versionPart",
+            "type": "pickString",
+            "description": "Which part of VERSION to raise",
+            "options": ["patch", "minor", "major"],
+            "default": "patch"
+        },
+        {
+            "id": "rsConfig",
+            "type": "pickString",
+            "description": "Build configuration to run",
+            "options": ["Debug", "Release"],
+            "default": "Debug"
+        },
+        {
+            "id": "rsLevel",
+            "type": "pickString",
+            "description": "Level to force",
+            "options": [
+                { "label": "None (your pick)", "value": "" },
+                { "label": "0  Ambush at Mos Eisley", "value": "0" },
+                { "label": "1  Rendezvous on Barkhesh", "value": "1" },
+                { "label": "2  The Search for the Nonnah", "value": "2" },
+                { "label": "3  Defection at Corellia", "value": "3" },
+                { "label": "4  Liberation of Gerrard V", "value": "4" },
+                { "label": "5  The Jade Moon", "value": "5" },
+                { "label": "6  Imperial Construction Yards", "value": "6" },
+                { "label": "7  Assault on Kile II", "value": "7" },
+                { "label": "8  Rescue on Kessel", "value": "8" },
+                { "label": "9  Prisons of Kessel", "value": "9" },
+                { "label": "10 Battle Above Taloraan", "value": "10" },
+                { "label": "11 Escape from Fest", "value": "11" },
+                { "label": "12 Blockade on Chandrila", "value": "12" },
+                { "label": "13 Raid on Sullust", "value": "13" },
+                { "label": "14 Moff Seerdon's Revenge", "value": "14" },
+                { "label": "15 The Battle of Calamari", "value": "15" },
+                { "label": "16 Beggar's Canyon (bonus)", "value": "16" },
+                { "label": "17 The Death Star Trench Run (bonus)", "value": "17" },
+                { "label": "18 The Battle of Hoth (bonus)", "value": "18" }
+            ],
+            "default": ""
+        },
+        {
+            "id": "rsCraft",
+            "type": "pickString",
+            "description": "Craft to force",
+            "options": [
+                { "label": "None (your pick)", "value": "" },
+                { "label": "0 X-wing", "value": "0" },
+                { "label": "1 Y-wing", "value": "1" },
+                { "label": "2 A-wing", "value": "2" },
+                { "label": "3 V-wing", "value": "3" },
+                { "label": "4 Snowspeeder", "value": "4" },
+                { "label": "5 Millennium Falcon", "value": "5" },
+                { "label": "6 TIE Interceptor", "value": "6" },
+                { "label": "7 T-16 Skyhopper", "value": "7" },
+                { "label": "8 Naboo Starfighter", "value": "8" }
+            ],
+            "default": ""
+        },
+        {
+            "id": "rsRecLevel",
+            "type": "pickString",
+            "description": "Level to record (selects the tools/recordings folder)",
+            "options": [
+                { "label": "0  Ambush at Mos Eisley", "value": "0" },
+                { "label": "1  Rendezvous on Barkhesh", "value": "1" },
+                { "label": "2  The Search for the Nonnah", "value": "2" },
+                { "label": "3  Defection at Corellia", "value": "3" },
+                { "label": "4  Liberation of Gerrard V", "value": "4" },
+                { "label": "5  The Jade Moon", "value": "5" },
+                { "label": "6  Imperial Construction Yards", "value": "6" },
+                { "label": "7  Assault on Kile II", "value": "7" },
+                { "label": "8  Rescue on Kessel", "value": "8" },
+                { "label": "9  Prisons of Kessel", "value": "9" },
+                { "label": "10 Battle Above Taloraan", "value": "10" },
+                { "label": "11 Escape from Fest", "value": "11" },
+                { "label": "12 Blockade on Chandrila", "value": "12" },
+                { "label": "13 Raid on Sullust", "value": "13" },
+                { "label": "14 Moff Seerdon's Revenge", "value": "14" },
+                { "label": "15 The Battle of Calamari", "value": "15" },
+                { "label": "16 Beggar's Canyon (bonus)", "value": "16" },
+                { "label": "17 The Death Star Trench Run (bonus)", "value": "17" },
+                { "label": "18 The Battle of Hoth (bonus)", "value": "18" }
+            ],
+            "default": "0"
+        },
+        {
+            "id": "rsRecKind",
+            "type": "pickString",
+            "description": "Recording kind",
+            "options": [
+                { "label": "Mission (lockstep, .hash baseline, boots into the level)", "value": "mission" },
+                { "label": "Session (from launch, menus included)", "value": "session" }
+            ],
+            "default": "mission"
+        },
+        {
+            "id": "rsRecName",
+            "type": "promptString",
+            "description": "Recording file name (blank = <mission>_<timestamp>.rec)",
+            "default": ""
+        },
+        {
+            "id": "rsCoopHostPad",
+            "type": "promptString",
+            "description": "Host recording in the level's folder (blank = newest <mission>_<timestamp>.rec, else newest solo mission recording)",
+            "default": ""
+        },
+        {
+            "id": "rsRecConfig",
+            "type": "pickString",
+            "description": "Build configuration to record with (Release matches replays)",
+            "options": ["Release", "Debug"],
+            "default": "Release"
+        },
+        {
+            "id": "rsTest",
+            "type": "pickString",
+            "description": "Standalone test to build and run",
+            "options": ["touch_input_test", "video_config_test", "transition_gate_test", "input_bindings_test"],
+            "default": "transition_gate_test"
+        },
+        {
+            "id": "wslBuildDir",
+            "type": "pickString",
+            "description": "Linux build tree to test",
+            "options": [
+                { "label": "Debug (~/rs64-build)", "value": "rs64-build" },
+                { "label": "Release (~/rs64-build-release)", "value": "rs64-build-release" }
+            ],
+            "default": "rs64-build"
+        },
+        {
+            "id": "wslTest",
+            "type": "pickString",
+            "description": "Standalone test to build and run in WSL",
+            "options": ["fault_guard_test", "touch_input_test", "video_config_test", "transition_gate_test", "input_bindings_test"],
+            "default": "fault_guard_test"
+        },
+        {
+            "id": "releaseOutDir",
+            "type": "promptString",
+            "description": "Folder for the release packages (a <version> subfolder is created; %VARS% are expanded)",
+            "default": "%USERPROFILE%\\Desktop\\rs64-release"
+        },
+        {
+            "id": "releaseTargets",
+            "type": "promptString",
+            "description": "Targets, comma-separated: windows-x64, windows-x86, linux-x64, linux-arm64, linux-armhf, linux-i386, android",
+            "default": "windows-x64,windows-x86,linux-x64,linux-arm64,linux-armhf,linux-i386"
+        },
+        {
+            "id": "crossArch",
+            "type": "pickString",
+            "description": "Linux target architecture",
+            "options": [
+                "arm64",
+                "armhf",
+                "i386"
+            ],
+            "default": "arm64"
+        },
+        {
+            "id": "linuxReleaseDir",
+            "type": "promptString",
+            "description": "Folder holding the RogueSquadron64Recomp-linux-<arch>-*.tar.xz packages (Windows or WSL path)",
+            "default": "build/release"
+        },
+        {
+            "id": "linuxBuildDir",
+            "type": "pickString",
+            "description": "WSL build tree to package",
+            "options": [
+                "~/rs64-build-release",
+                "~/rs64-build-arm64-release",
+                "~/rs64-build"
+            ],
+            "default": "~/rs64-build-release"
+        },
+        {
+            "id": "linuxExportDir",
+            "type": "promptString",
+            "description": "Folder to write rs64-linux-<arch>.tar.xz into (Windows or WSL path)",
+            "default": "build/release"
+        },
+        {
+            "id": "linuxPackage",
+            "type": "promptString",
+            "description": "Package to deploy (Windows or WSL path)",
+            "default": "build/release/rs64-linux-arm64.tar.xz"
+        },
+        {
+            "id": "remoteHost",
+            "type": "promptString",
+            "description": "Remote Linux host name or IP",
+            "default": "raspberrypi.local"
+        },
+        {
+            "id": "remoteUser",
+            "type": "promptString",
+            "description": "Remote user name",
+            "default": "pi"
+        },
+        {
+            "id": "remoteDir",
+            "type": "promptString",
+            "description": "Remote folder for the game (created if missing)",
+            "default": "~/rs64"
+        },
+        {
+            "id": "romPath",
+            "type": "promptString",
+            "description": "ROM to copy (Windows or WSL path)",
+            "default": "rogue_squadron.z64"
+        },
+        {
+            "id": "wslDistro",
+            "type": "pickString",
+            "description": "WSL distro to build in (run 'wsl -l -v' to list installed distros)",
+            "options": [
+                "Ubuntu-24.04",
+                "Ubuntu-18.04"
+            ],
+            "default": "Ubuntu-24.04"
+        },
+        {
+            "id": "macArch",
+            "type": "pickString",
+            "description": "macOS target architecture",
+            "options": ["arm64", "x86_64"],
+            "default": "arm64"
+        },
+        {
+            "id": "macConfig",
+            "type": "pickString",
+            "description": "macOS build configuration",
+            "options": ["Debug", "Release"],
+            "default": "Debug"
+        }
+    ]
+}

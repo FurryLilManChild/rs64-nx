@@ -1,0 +1,168 @@
+# IDE / editor
+.vscode/settings.json
+.vscode/c_cpp_properties.json
+.vscode/launch.json
+.vs/
+.idea
+.cache
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# OS
+.DS_Store
+
+# Crash dumps
+crash_*.dmp
+*.dmp
+
+# ROMs and ELF inputs
+*.elf
+*.z64
+*.n64
+
+# Recompiler outputs
+RecompiledFuncs/
+RecompiledPatches/
+
+# Build directories
+build*/
+build-*
+!tools/build-mods.ps1
+cmake-build-*
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+out/
+node_modules/
+vcpkg_installed/
+
+# Build artifacts
+*.exe
+*.dll
+*.lib
+*.o
+*.obj
+*.pdb
+*.tlog
+*.ipdb
+*.iobj
+
+# Runtime artifacts
+imgui.ini
+rt64.log
+saves/
+*.bak
+
+# Recompiler binaries
+N64Recomp
+RSPRecomp
+
+# Misc
+*.lnk
+
+# Debug captures and logs (developer-local)
+*_log.txt
+freeze_log.txt
+run_stderr.txt
+run_stdout.txt
+test_err.txt
+test_out.txt
+tasks_log.txt
+snap_*.txt
+dlhist_*.txt
+
+# Captured RDP / RDRAM dumps (developer-local)
+rdram_*.bin
+pak_*.bin
+texrect_chunks.bin
+factor5_ucode_text.bin
+factor5_ucode_data.bin
+factor5_ucode_disasm.txt
+
+mqfocus.txt
+mqdiag_*.txt
+skills-lock.json
+.mcp.json
+*.log
+*.stackdump
+*.csv
+logs/
+dumps/
+/.agents
+/wav
+__pycache__/
+*.py[cod]
+/tools/rename
+/plans
+.claude/settings.json
+
+# Lockstep replay run outputs (the .rec/.rec.hash recordings are inputs and stay)
+tools/recordings/**/*.out
+tools/recordings/**/*.hash.dump
+
+# native-demo example mod: separate-build DLL artifacts (built via mods/native-demo/CMakeLists.txt)
+mods/native-demo/build/
+mods/native-demo/native_demo.dll
+mods/native-demo/native_demo.lib
+mods/native-demo/native_demo.exp
+mods/native-demo/native_demo.pdb
+
+# menu-example mod: separate-build DLL artifacts (built via mods/menu-example/CMakeLists.txt)
+mods/menu-example/build/
+mods/menu-example/menu_example.dll
+mods/menu-example/menu_example.lib
+mods/menu-example/menu_example.exp
+mods/menu-example/menu_example.pdb
+
+
+# Generated from tools/state/state_model.toml by tools/state/gen_state_table.cpp
+src/game/state_table.inl
+
+
+# Code mods: .nrm outputs and their separate build dirs (tools/mods/code_mod.cmake)
+mods/*.nrm
+mods/*/build/
+
+# Steamworks runtime for the steam-relay mod: players supply it, never committed or shipped (*.dll is covered above)
+libsteam_api.so
+libsteam_api.dylib
+
+# Android (Gradle) project: caches, native build tree, machine-local SDK path
+android/.gradle/
+android/app/.cxx/
+android/local.properties
+
+# CI runner secrets
+ci/linux/runner.env
+
+# Local Steamworks SDK for building the steam-relay mod (never committed)
+lib/steamworks/
+
+# Conflict-probe test mods (tests/mods/conflict-probe)
+tests/mods/conflict-probe/*.nrm
+tests/mods/conflict-probe/build/
+tests/mods/conflict-probe/*/build/
+tests/mods/event_probe.nrm
+tests/mods/event-probe/build/
+tests/mods/menu_probe.nrm
+
+# Patches ELF build outputs (CMakeLists.txt ---- Patches ELF ----)
+patches/patches.elf
+patches/patches.bin
+tests/mods/replay_probe.nrm
+tests/mods/replay-probe/build/
+/.playwright-mcp

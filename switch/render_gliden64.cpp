@@ -1,0 +1,367 @@
+// GLideN64 behind ultramodern's RendererContext. RT64 is driven the same way on PC (a
+// mupen64plus GFX_INFO over the recomp's RDRAM, see
+// lib/RecompFrontend/recompui/src/renderer/rt64_render_context.cpp), so the memory layout
+// GLideN64 expects (32-bit words in host order) is already what the recompiled code writes.
+#include <atomic>
+#include <malloc.h>
+#include <cstdio>
+#include <cstring>
+#include <memory>
+
+#include <SDL.h>
+#include <switch.h>
+
+#define M64P_PLUGIN_PROTOTYPES 1
+#include "m64p_common.h"
+#include "m64p_plugin.h"
+
+#include "librecomp/addresses.hpp"
+#include "nx_cheats.h"
+#include "nx_ram.h"
+#include "nx_settings.h"
+#include "ultramodern/renderer_context.hpp"
+
+void cvnx_seed_gliden64_config();
+#ifdef CVNX_REMOTE
+void cvnx_remote_set_rdram(uint8_t* base);
+void cvnx_remote_time(int kind, uint64_t start_tick);
+#define CVNX_TIME(kind, start) cvnx_remote_time(kind, start)
+extern "C" uint32_t cvnx_interp_shown_position(uint32_t origin, bool in_between_image);
+extern "C" uint32_t cvnx_interp_current_buffer();
+extern uint32_t cvnx_shown_position;
+extern uint32_t cvnx_shown_origin;
+// Bit 31 of the origin: the VI is blanked (osViBlack: hStart 0), so GLideN64 presents black.
+#define CVNX_SHOWN(origin, in_between_image) \
+    (cvnx_shown_position = cvnx_interp_shown_position(origin, in_between_image), \
+     cvnx_shown_origin = (origin) | (ultramodern::renderer::get_vi_regs()->VI_H_START_REG == 0 ? 0x80000000u : 0))
+#define CVNX_DL_BUFFER(index, in_between_image) \
+    cvnx_dl_buffer_ring[(index) % 512] = cvnx_interp_current_buffer() | ((in_between_image) ? 0x80000000u : 0)
+#else
+#define CVNX_TIME(kind, start)
+#define CVNX_SHOWN(origin, in_between_image)
+#define CVNX_DL_BUFFER(index, in_between_image)
+#endif
+bool cvnx_front_buffer_redrawn(uint32_t origin);
+extern "C" void cvnx_interp_frame_begin();
+extern "C" void cvnx_rt64ex_save_state();
+extern "C" void cvnx_rt64ex_restore_state();
+extern "C" bool cvnx_interp_begin_second_pass(uint32_t first_pass_us, bool wanted);
+extern "C" void cvnx_interp_end_second_pass();
+extern "C" bool cvnx_interp_present_in_between(uint32_t origin);
+extern "C" void cvnx_interp_present_done();
+extern "C" bool cvnx_claim_screen_update();  // ultramodern events.cpp
+extern "C" void cvnx_interp_pass2_done(uint32_t us);
+// Dev harness: gl midpresent 0|1 (gliden64_rt64ex.cpp).
+std::atomic<bool> cvnx_mid_present{true};
+
+// Time of the last display list's passes in microseconds (second: 0 when it had no in-between image), for the
+// NX Options performance overlay.
+std::atomic<uint32_t> cvnx_pass1_us{0};
+std::atomic<uint32_t> cvnx_pass2_us{0};
+// Ticks at which the last display lists started, one per game frame (dev harness frames command): 33.3 ms apart at
+// the game's 30 fps; 50 ms means the game itself lost a frame, which shows as a stutter even at 60 presents a second.
+uint64_t cvnx_dl_ring[512];
+uint32_t cvnx_dl_buffer_ring[512];  // color buffer of each display list, bit 31: it got an in-between image
+uint32_t cvnx_dl_us_ring[512];      // its first pass, in microseconds
+uint32_t cvnx_dl_us2_ring[512];     // its second pass, 0 without an in-between image
+std::atomic<uint32_t> cvnx_dl_count{0};
+
+extern "C" void cvnx_texture_counters(unsigned* textures, unsigned* texture_kib, unsigned* fb_textures,
+                                        unsigned* misses, unsigned* gl_error);  // gliden64_rt64ex.cpp
+// Memory counters, sampled on the gfx thread once a second: the dev harness's mem command reads them, and the log
+// gets them once a minute, so a long session's log shows what grows.
+std::atomic<uint32_t> cvnx_mem_textures{0};
+std::atomic<uint32_t> cvnx_mem_texture_kib{0};
+std::atomic<uint32_t> cvnx_mem_fb_textures{0};
+std::atomic<uint32_t> cvnx_mem_texture_misses{0};  // textures created since the start
+std::atomic<uint32_t> cvnx_mem_heap_kib{0};     // newlib malloc in use
+std::atomic<uint32_t> cvnx_mem_used_mib{0};     // the process, as the kernel counts it
+std::atomic<uint32_t> cvnx_mem_total_mib{0};
+std::atomic<uint32_t> cvnx_mem_gl_errors{0};    // samples that found a GL error
+std::atomic<uint32_t> cvnx_mem_last_gl_error{0};
+
+namespace {
+    // OSTask is copied where the RSP boot code leaves it, at the end of DMEM.
+    constexpr uint32_t TASK_DMEM_OFFSET = 0xFC0;
+    constexpr uint32_t KSEG_MASK = 0x1FFFFFFF;
+    // libultra's ROM header: GLideN64 reads the internal name from it for its per-game tweaks.
+    constexpr char ROM_NAME[] = "CASTLEVANIA         ";
+
+    uint8_t dmem[0x1000];
+    uint8_t imem[0x1000];
+    uint8_t rom_header[0x40];
+    unsigned int mi_intr_reg;
+    unsigned int sp_status_reg;
+    unsigned int dpc_start_reg, dpc_end_reg, dpc_current_reg, dpc_status_reg;
+    unsigned int dpc_clock_reg, dpc_bufbusy_reg, dpc_pipebusy_reg, dpc_tmem_reg;
+    const unsigned int rdram_size = recomp::mem_size;
+
+    // Frame Rate between 30 and 60: an in-between image for (rate - 30) of every 30 frames, spread evenly (a
+    // Bresenham accumulator), so 45 fps draws one every other frame and 60 every frame.
+    bool in_between_due() {
+        static int accumulator = 0;
+        accumulator += nx::target_fps() - 30;
+        if (accumulator < 30) return false;
+        accumulator -= 30;
+        return true;
+    }
+
+    // A line in the log every 5 seconds: display lists (game frames) and screen presents per second, and the average
+    // GLideN64 time per display list, to tell a slow game thread from a slow renderer in testers' logs.
+    std::atomic<uint32_t> presents{0};
+    uint64_t pass1_sum_us = 0;
+    uint32_t pass1_samples = 0;
+    uint32_t pass1_max_us = 0;
+    void log_perf(uint32_t pass1_us) {
+        static uint64_t last = 0;
+        static uint32_t last_dl = 0, last_presents = 0;
+        pass1_sum_us += pass1_us;
+        pass1_samples++;
+        if (pass1_us > pass1_max_us) pass1_max_us = pass1_us;
+        const uint64_t now = armGetSystemTick();
+        if (last == 0) { last = now; return; }
+        const uint64_t ns = armTicksToNs(now - last);
+        if (ns < 5000000000ull) return;
+        const uint32_t dl = cvnx_dl_count.load(), shown = presents.load();
+        const double seconds = ns / 1e9;
+        std::printf("[CVNX] perf: %.1f frames/s, %.1f presents/s, gfx %.1f ms avg %.1f ms max per frame, CPU %s\n",
+                    (dl - last_dl) / seconds, (shown - last_presents) / seconds,
+                    pass1_samples ? pass1_sum_us / 1000.0 / pass1_samples : 0.0, pass1_max_us / 1000.0,
+                    appletGetOperationMode() == AppletOperationMode_Handheld ? "handheld" : "docked");
+        last = now; last_dl = dl; last_presents = shown;
+        pass1_sum_us = 0; pass1_samples = 0; pass1_max_us = 0;
+    }
+
+    void sample_memory() {
+        static uint64_t last = 0;
+        static uint64_t last_log = 0;
+        const uint64_t now = armGetSystemTick();
+        if (last != 0 && armTicksToNs(now - last) < 1000000000ull) return;
+        last = now;
+        unsigned textures = 0, texture_kib = 0, fb_textures = 0, misses = 0, gl_error = 0;
+        cvnx_texture_counters(&textures, &texture_kib, &fb_textures, &misses, &gl_error);
+        const struct mallinfo heap = mallinfo();
+        uint64_t used = 0, total = 0;
+        svcGetInfo(&used, InfoType_UsedMemorySize, CUR_PROCESS_HANDLE, 0);
+        svcGetInfo(&total, InfoType_TotalMemorySize, CUR_PROCESS_HANDLE, 0);
+        cvnx_mem_textures = textures;
+        cvnx_mem_texture_kib = texture_kib;
+        cvnx_mem_fb_textures = fb_textures;
+        cvnx_mem_texture_misses = misses;
+        cvnx_mem_heap_kib = static_cast<uint32_t>(heap.uordblks / 1024);
+        cvnx_mem_used_mib = static_cast<uint32_t>(used >> 20);
+        cvnx_mem_total_mib = static_cast<uint32_t>(total >> 20);
+        if (gl_error != 0) {
+            cvnx_mem_gl_errors++;
+            cvnx_mem_last_gl_error = gl_error;
+        }
+        if (last_log == 0 || armTicksToNs(now - last_log) >= 60000000000ull) {
+            last_log = now;
+            std::printf("[CVNX] mem: textures %u (%u KiB, %u created), fb textures %u, heap %u MiB, process %u/%u MiB, "
+                        "gl errors %u (last 0x%x)\n", textures, texture_kib, misses, fb_textures,
+                        cvnx_mem_heap_kib.load() >> 10, cvnx_mem_used_mib.load(), cvnx_mem_total_mib.load(),
+                        cvnx_mem_gl_errors.load(), cvnx_mem_last_gl_error.load());
+        }
+    }
+
+    // ultramodern signals SP/DP completion itself once send_dl returns.
+    void check_interrupts() {}
+
+    void debug_callback(void*, int level, const char* message) {
+        if (level <= M64MSG_WARNING) {
+            fprintf(stderr, "[GLideN64] %s\n", message);
+        }
+    }
+
+    // GLideN64 reads the header as 32-bit host-order words, like the ROM image mupen64plus keeps.
+    void build_rom_header() {
+        memset(rom_header, 0, sizeof(rom_header));
+        for (size_t i = 0; i < sizeof(ROM_NAME) - 1; i++) {
+            rom_header[(0x20 + i) ^ 3] = static_cast<uint8_t>(ROM_NAME[i]);
+        }
+    }
+
+    uint32_t to_physical(uint32_t address) {
+        return address & KSEG_MASK;
+    }
+
+    class GLideN64RendererContext final : public ultramodern::renderer::RendererContext {
+    public:
+        explicit GLideN64RendererContext(uint8_t* rdram) {
+            chosen_api = ultramodern::renderer::GraphicsApi::Auto;
+            cvnx_seed_gliden64_config();
+            nx::cheats::set_rdram(rdram);
+            nx::ram::base = rdram;
+#ifdef CVNX_REMOTE
+            cvnx_remote_set_rdram(rdram);
+#endif
+            build_rom_header();
+
+            if (PluginStartup(nullptr, nullptr, debug_callback) != M64ERR_SUCCESS) {
+                setup_result = ultramodern::renderer::SetupResult::GraphicsDeviceNotFound;
+                return;
+            }
+
+            auto* vi = ultramodern::renderer::get_vi_regs();
+            GFX_INFO info{};
+            info.HEADER = rom_header;
+            info.RDRAM = rdram;
+            info.DMEM = dmem;
+            info.IMEM = imem;
+            info.MI_INTR_REG = &mi_intr_reg;
+            info.DPC_START_REG = &dpc_start_reg;
+            info.DPC_END_REG = &dpc_end_reg;
+            info.DPC_CURRENT_REG = &dpc_current_reg;
+            info.DPC_STATUS_REG = &dpc_status_reg;
+            info.DPC_CLOCK_REG = &dpc_clock_reg;
+            info.DPC_BUFBUSY_REG = &dpc_bufbusy_reg;
+            info.DPC_PIPEBUSY_REG = &dpc_pipebusy_reg;
+            info.DPC_TMEM_REG = &dpc_tmem_reg;
+            info.VI_STATUS_REG = &vi->VI_STATUS_REG;
+            info.VI_ORIGIN_REG = &vi->VI_ORIGIN_REG;
+            info.VI_WIDTH_REG = &vi->VI_WIDTH_REG;
+            info.VI_INTR_REG = &vi->VI_INTR_REG;
+            info.VI_V_CURRENT_LINE_REG = &vi->VI_V_CURRENT_LINE_REG;
+            info.VI_TIMING_REG = &vi->VI_TIMING_REG;
+            info.VI_V_SYNC_REG = &vi->VI_V_SYNC_REG;
+            info.VI_H_SYNC_REG = &vi->VI_H_SYNC_REG;
+            info.VI_LEAP_REG = &vi->VI_LEAP_REG;
+            info.VI_H_START_REG = &vi->VI_H_START_REG;
+            info.VI_V_START_REG = &vi->VI_V_START_REG;
+            info.VI_V_BURST_REG = &vi->VI_V_BURST_REG;
+            info.VI_X_SCALE_REG = &vi->VI_X_SCALE_REG;
+            info.VI_Y_SCALE_REG = &vi->VI_Y_SCALE_REG;
+            info.CheckInterrupts = check_interrupts;
+            info.version = 2;
+            info.SP_STATUS_REG = &sp_status_reg;
+            info.RDRAM_SIZE = &rdram_size;
+
+            if (!InitiateGFX(info) || !RomOpen()) {
+                setup_result = ultramodern::renderer::SetupResult::GraphicsDeviceNotFound;
+                return;
+            }
+            setup_result = ultramodern::renderer::SetupResult::Success;
+            opened = true;
+        }
+
+        ~GLideN64RendererContext() override {
+            shutdown();
+        }
+
+        bool valid() override { return opened; }
+
+        bool update_config(const ultramodern::renderer::GraphicsConfig&, const ultramodern::renderer::GraphicsConfig&) override {
+            return true;
+        }
+
+        void enable_instant_present() override {}
+
+        void send_dl(const OSTask* task) override {
+            // Lay the task out in DMEM as osSpTaskLoad does, with physical addresses.
+            const OSTask_s& t = task->t;
+            const uint32_t words[16] = {
+                t.type, t.flags,
+                to_physical(t.ucode_boot), t.ucode_boot_size,
+                to_physical(t.ucode), t.ucode_size,
+                to_physical(t.ucode_data), t.ucode_data_size,
+                to_physical(t.dram_stack), t.dram_stack_size,
+                to_physical(t.output_buff), t.output_buff_size,
+                to_physical(t.data_ptr), t.data_size,
+                to_physical(t.yield_data_ptr), t.yield_data_size,
+            };
+            memcpy(&dmem[TASK_DMEM_OFFSET], words, sizeof(words));
+            // HALT | BROKE | TASKDONE, set before ProcessDList as GFX_INFO v2 requires.
+            sp_status_reg = 0x0203;
+            const uint64_t start = armGetSystemTick();
+            const uint32_t dl_index = cvnx_dl_count.load();
+            cvnx_dl_ring[dl_index % 512] = start;
+            cvnx_dl_count = dl_index + 1;
+            cvnx_interp_frame_begin();
+            cvnx_rt64ex_save_state();
+            ProcessDList();
+            const uint64_t second = armGetSystemTick();
+            CVNX_TIME(2, start);
+            cvnx_pass1_us = static_cast<uint32_t>(armTicksToNs(second - start) / 1000);
+            cvnx_pass2_us = 0;
+            // Above 30 fps: the same display list again, with matrices halfway from the previous frame
+            // (gliden64_rt64ex.cpp), on the frames the chosen rate wants an in-between image for.
+            const bool second_pass = nx::interpolating() && cvnx_interp_begin_second_pass(cvnx_pass1_us, in_between_due());
+            CVNX_DL_BUFFER(dl_index, second_pass);
+            cvnx_dl_us_ring[dl_index % 512] = cvnx_pass1_us;
+            if (second_pass) {
+                // The screen update of a VI that went by during the first pass is presented now, not after the
+                // second (lib/N64ModernRuntime/ultramodern/src/events.cpp, cvnx_claim_screen_update).
+                if (cvnx_mid_present && cvnx_claim_screen_update()) update_screen();
+                // Pass 2's time starts here: a swap waiting for vblank above is not drawing time, and the gate predicts
+                // the next second pass from this one.
+                const uint64_t second_start = armGetSystemTick();
+                cvnx_rt64ex_restore_state();
+                sp_status_reg = 0x0203;
+                ProcessDList();
+                cvnx_interp_end_second_pass();
+                CVNX_TIME(3, second_start);
+                cvnx_pass2_us = static_cast<uint32_t>(armTicksToNs(armGetSystemTick() - second_start) / 1000);
+                cvnx_interp_pass2_done(cvnx_pass2_us);
+            }
+            cvnx_dl_us2_ring[dl_index % 512] = cvnx_pass2_us;
+            CVNX_TIME(0, start);
+            sample_memory();
+            log_perf(cvnx_pass1_us);
+        }
+
+        void send_dummy_workload(uint32_t) {}
+
+        void update_screen() override {
+            // DK64 starts frame N+2 in the buffer still on screen and relies on the RDP freeze (not
+            // emulated) to hold it back, so re-presenting that buffer would show N+2 before N+1:
+            // back-and-forth jitter in motion. Keep the image on screen instead; the VI moves to the
+            // other buffer next. Bounded so a single-buffered scene still refreshes.
+            const uint32_t origin = ultramodern::renderer::get_vi_regs()->VI_ORIGIN_REG;
+            // 60 fps: a new frame shows its in-between image first; the next VI presents the real one.
+            if (cvnx_interp_present_in_between(origin)) {
+                CVNX_SHOWN(origin, true);
+                UpdateScreen();
+                presents++;
+                cvnx_interp_present_done();
+                held_presents = 0;
+                presented_origin = origin;
+                return;
+            }
+            if (origin == presented_origin && held_presents < MAX_HELD_PRESENTS && cvnx_front_buffer_redrawn(origin)) {
+                held_presents++;
+            } else {
+                held_presents = 0;
+                presented_origin = origin;
+                [[maybe_unused]] const uint64_t start = armGetSystemTick();
+                CVNX_SHOWN(origin, false);
+                UpdateScreen();
+                presents++;
+                CVNX_TIME(1, start);
+            }
+        }
+
+        void shutdown() override {
+            if (opened) {
+                RomClosed();
+                PluginShutdown();
+                opened = false;
+            }
+        }
+
+        uint32_t get_display_framerate() const override { return 60; }
+        float get_resolution_scale() const override { return static_cast<float>(nx::resolution_factor()); }
+
+    private:
+
+        bool opened = false;
+        // ponytail: 3 held VIs max, so single-buffered scenes drop to 15 Hz at worst; a real RDP freeze would avoid it.
+        static constexpr uint32_t MAX_HELD_PRESENTS = 3;
+        uint32_t presented_origin = 0;
+        uint32_t held_presents = 0;
+    };
+}
+
+std::unique_ptr<ultramodern::renderer::RendererContext> cvnx_create_render_context(
+    uint8_t* rdram, ultramodern::renderer::WindowHandle, bool) {
+    return std::make_unique<GLideN64RendererContext>(rdram);
+}

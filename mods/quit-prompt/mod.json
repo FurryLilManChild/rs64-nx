@@ -1,0 +1,15 @@
+{
+  "game_id": "rs64",
+  "id": "quit-prompt",
+  "display_name": "Quit Prompt",
+  "description": "Adds a confirmation prompt to the main-menu QUIT button.",
+  "version": "1.0.0",
+  "authors": ["RogueSquadron64Recomp"],
+  "minimum_recomp_version": "0.0.0",
+  "config_schema": {
+    "options": [
+      { "id": "quit_label",   "name": "Quit label",     "description": "Text on the main-menu QUIT button.",              "type": "String", "default": "QUIT" },
+      { "id": "quit_confirm", "name": "Confirm prompt",  "description": "Yes/No question shown on select (empty = none).", "type": "String", "default": "QUIT THE GAME?" }
+    ]
+  }
+}
