@@ -252,6 +252,8 @@ namespace {
 // The .nro's path, for Restart Game (nx_menu.cpp).
 const char* cvnx_program_path = nullptr;
 
+extern "C" void cvnx_track_thread(const char* name);
+
 int main(int argc, char** argv) {
 #ifdef CVNX_REMOTE
     cvnx_trace("main: start");
@@ -259,6 +261,7 @@ int main(int argc, char** argv) {
     if (argc > 0) cvnx_program_path = argv[0];
     std::set_terminate(log_terminate);
     init_logging();
+    cvnx_track_thread("Main");
     printf("[CVNX] Rogue Squadron 64 Recompiled %s for Switch, applet type %d (%llu ms)\n", VERSION_STRING.c_str(),
            static_cast<int>(appletGetAppletType()), cvnx_ms_since_boot());
     nx::load();

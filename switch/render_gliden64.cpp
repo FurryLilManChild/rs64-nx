@@ -46,6 +46,7 @@ bool cvnx_front_buffer_redrawn(uint32_t origin);
 extern "C" void cvnx_interp_frame_begin();
 extern "C" void cvnx_rt64ex_save_state();
 extern "C" void cvnx_rt64ex_restore_state();
+extern "C" void cvnx_thread_cpu_report(char* out, size_t size);
 extern "C" bool cvnx_interp_begin_second_pass(uint32_t first_pass_us, bool wanted);
 extern "C" void cvnx_interp_end_second_pass();
 extern "C" bool cvnx_interp_present_in_between(uint32_t origin);
@@ -115,6 +116,27 @@ namespace {
     uint64_t pass1_sum_us = 0;
     uint32_t pass1_samples = 0;
     uint32_t pass1_max_us = 0;
+    // Current CPU, GPU and memory clocks in MHz (0 if clkrst is unavailable), so a log shows stock or overclocked.
+    void read_clocks(unsigned mhz[3]) {
+        static int ready = -1;
+        if (ready < 0) {
+            ready = R_SUCCEEDED(clkrstInitialize()) ? 1 : 0;
+        }
+
+        const PcvModuleId modules[3] = {PcvModuleId_CpuBus, PcvModuleId_GPU, PcvModuleId_EMC};
+        for (int i = 0; i < 3; i++) {
+            mhz[i] = 0;
+            ClkrstSession session;
+            u32 hz = 0;
+            if (ready && R_SUCCEEDED(clkrstOpenSession(&session, modules[i], 3))) {
+                if (R_SUCCEEDED(clkrstGetClockRate(&session, &hz))) {
+                    mhz[i] = hz / 1000000;
+                }
+                clkrstCloseSession(&session);
+            }
+        }
+    }
+
     void log_perf(uint32_t pass1_us) {
         static uint64_t last = 0;
         static uint32_t last_dl = 0, last_presents = 0;
@@ -131,6 +153,12 @@ namespace {
                     (dl - last_dl) / seconds, (shown - last_presents) / seconds,
                     pass1_samples ? pass1_sum_us / 1000.0 / pass1_samples : 0.0, pass1_max_us / 1000.0,
                     appletGetOperationMode() == AppletOperationMode_Handheld ? "handheld" : "docked");
+
+        char cpu[160];
+        unsigned mhz[3];
+        cvnx_thread_cpu_report(cpu, sizeof(cpu));
+        read_clocks(mhz);
+        std::printf("[CVNX] threads: %s; clocks CPU %u, GPU %u, RAM %u MHz\n", cpu, mhz[0], mhz[1], mhz[2]);
         last = now; last_dl = dl; last_presents = shown;
         pass1_sum_us = 0; pass1_samples = 0; pass1_max_us = 0;
     }

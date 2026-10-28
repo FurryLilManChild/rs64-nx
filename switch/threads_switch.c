@@ -6,6 +6,7 @@
 // - every thread starts on core 0: ultramodern's thread names/priorities are honoured below.
 #include <pthread.h>
 
+#include <stdio.h>
 #include <string.h>
 
 #include <switch.h>
@@ -70,10 +71,78 @@ static __thread int is_rsp_task_thread;
 void cvnx_remote_track_thread(const char* name, Handle handle);
 #endif
 
+// CPU time per thread role for the perf line in the log (render_gliden64.cpp): kernel run time of each named
+// thread, summed by role, as a share of wall time since the previous report.
+enum { ROLE_GAME, ROLE_GFX, ROLE_RSP, ROLE_VI, ROLE_TIMER, ROLE_MAIN, ROLE_COUNT };
+static const char* const role_names[ROLE_COUNT] = {"game", "gfx", "rsp", "vi", "timer", "main"};
+#define MAX_TRACKED 48
+static struct { Handle handle; int role; u64 last; } tracked[MAX_TRACKED];
+static int tracked_count;
+static Mutex tracked_lock;
+
+static int role_for(const char* name) {
+    if (strcmp(name, "Gfx Thread") == 0) return ROLE_GFX;
+    if (strcmp(name, "SP Task Thread") == 0) return ROLE_RSP;
+    if (strncmp(name, "VI Thread", 9) == 0) return ROLE_VI;
+    if (strncmp(name, "Timer Thread", 12) == 0) return ROLE_TIMER;
+    if (strcmp(name, "Main") == 0) return ROLE_MAIN;
+    return ROLE_GAME;
+}
+
+static u64 thread_ticks(Handle handle) {
+    u64 ticks = 0;
+    if (R_FAILED(svcGetInfo(&ticks, InfoType_ThreadTickCount, handle, (u64)-1)) &&
+        R_FAILED(svcGetInfo(&ticks, InfoType_ThreadTickCountDeprecated, handle, (u64)-1))) {
+        return 0;
+    }
+    return ticks;
+}
+
+void cvnx_track_thread(const char* name) {
+    mutexLock(&tracked_lock);
+    if (tracked_count < MAX_TRACKED) {
+        Handle handle = threadGetCurHandle();
+        tracked[tracked_count].handle = handle;
+        tracked[tracked_count].role = role_for(name);
+        tracked[tracked_count].last = thread_ticks(handle);
+        tracked_count++;
+    }
+    mutexUnlock(&tracked_lock);
+}
+
+// Writes "game 71% gfx 48% ..." for the time since the last call. Threads that ended report nothing.
+void cvnx_thread_cpu_report(char* out, size_t size) {
+    static u64 last_tick;
+    const u64 now = armGetSystemTick();
+    u64 delta[ROLE_COUNT] = {0};
+
+    mutexLock(&tracked_lock);
+    for (int i = 0; i < tracked_count; i++) {
+        const u64 ticks = thread_ticks(tracked[i].handle);
+        if (ticks >= tracked[i].last) {
+            delta[tracked[i].role] += ticks - tracked[i].last;
+        }
+        tracked[i].last = ticks;
+    }
+    mutexUnlock(&tracked_lock);
+
+    const u64 wall = last_tick ? now - last_tick : 0;
+    last_tick = now;
+    size_t used = 0;
+    out[0] = '\0';
+    for (int r = 0; r < ROLE_COUNT && used < size; r++) {
+        const unsigned pct = wall ? (unsigned)(delta[r] * 100 / wall) : 0;
+        int n = snprintf(out + used, size - used, "%s%s %u%%", used ? ", " : "", role_names[r], pct);
+        if (n < 0) break;
+        used += (size_t)n;
+    }
+}
+
 void cvnx_place_thread(const char* name) {
 #ifdef CVNX_REMOTE
     cvnx_remote_track_thread(name, threadGetCurHandle());
 #endif
+    cvnx_track_thread(name);
     is_rsp_task_thread = strcmp(name, "SP Task Thread") == 0;
     int core = core_for(name);
     if (core >= 0) {
