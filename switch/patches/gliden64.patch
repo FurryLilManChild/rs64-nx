@@ -1,5 +1,5 @@
 diff --git a/src/Combiner.cpp b/src/Combiner.cpp
-index c785837..0e13c33 100644
+index c7858372..0e13c338 100644
 --- a/src/Combiner.cpp
 +++ b/src/Combiner.cpp
 @@ -413,6 +413,14 @@ void CombinerInfo::setPolygonMode(DrawingState _drawingState)
@@ -18,7 +18,7 @@ index c785837..0e13c33 100644
  {
  	if (m_shadersLoaded >= m_combiners.size())
 diff --git a/src/Combiner.h b/src/Combiner.h
-index bc69b8e..8a01fee 100644
+index bc69b8e7..8a01fee7 100644
 --- a/src/Combiner.h
 +++ b/src/Combiner.h
 @@ -160,6 +160,11 @@ private:
@@ -34,7 +34,7 @@ index bc69b8e..8a01fee 100644
  
  	bool m_bChanged;
 diff --git a/src/FrameBuffer.cpp b/src/FrameBuffer.cpp
-index 9d6ba51..1cf19b3 100644
+index 9d6ba513..1cf19b32 100644
 --- a/src/FrameBuffer.cpp
 +++ b/src/FrameBuffer.cpp
 @@ -52,6 +52,11 @@ FrameBuffer::~FrameBuffer()
@@ -86,7 +86,7 @@ index 9d6ba51..1cf19b3 100644
  {
  	if (m_copied)
 diff --git a/src/FrameBuffer.h b/src/FrameBuffer.h
-index 6e06dae..d5b3a39 100644
+index 6e06dae4..d5b3a391 100644
 --- a/src/FrameBuffer.h
 +++ b/src/FrameBuffer.h
 @@ -90,6 +90,12 @@ struct FrameBuffer
@@ -103,7 +103,7 @@ index 6e06dae..d5b3a39 100644
  
  private:
 diff --git a/src/GBI.cpp b/src/GBI.cpp
-index 0423612..cdf0dbb 100644
+index 04236122..be9837f4 100644
 --- a/src/GBI.cpp
 +++ b/src/GBI.cpp
 @@ -8,6 +8,8 @@
@@ -124,7 +124,7 @@ index 0423612..cdf0dbb 100644
  				gSP.clipRatio = 2U;
  			break;
 diff --git a/src/Graphics/OpenGLContext/GLSL/glsl_CombinerProgramUniformFactoryCommon.cpp b/src/Graphics/OpenGLContext/GLSL/glsl_CombinerProgramUniformFactoryCommon.cpp
-index 05f5892..38caba9 100644
+index 05f58920..38caba94 100644
 --- a/src/Graphics/OpenGLContext/GLSL/glsl_CombinerProgramUniformFactoryCommon.cpp
 +++ b/src/Graphics/OpenGLContext/GLSL/glsl_CombinerProgramUniformFactoryCommon.cpp
 @@ -489,12 +489,17 @@ public:
@@ -148,7 +148,7 @@ index 05f5892..38caba9 100644
  		}
  		uVTrans.set(gSP.viewport.vtrans[0], gSP.viewport.vtrans[1], _force);
 diff --git a/src/Graphics/OpenGLContext/ThreadedOpenGl/atomicops.h b/src/Graphics/OpenGLContext/ThreadedOpenGl/atomicops.h
-index ff828ca..513c31d 100644
+index ff828ca8..513c31d1 100644
 --- a/src/Graphics/OpenGLContext/ThreadedOpenGl/atomicops.h
 +++ b/src/Graphics/OpenGLContext/ThreadedOpenGl/atomicops.h
 @@ -349,7 +349,7 @@ extern "C" {
@@ -169,11 +169,1206 @@ index ff828ca..513c31d 100644
  		//---------------------------------------------------------
  		// Semaphore (POSIX, Linux)
  		//---------------------------------------------------------
+diff --git a/src/Graphics/OpenGLContext/ThreadedOpenGl/opengl_Wrapper.cpp b/src/Graphics/OpenGLContext/ThreadedOpenGl/opengl_Wrapper.cpp
+index 1c30b6ed..43ad0d1f 100644
+--- a/src/Graphics/OpenGLContext/ThreadedOpenGl/opengl_Wrapper.cpp
++++ b/src/Graphics/OpenGLContext/ThreadedOpenGl/opengl_Wrapper.cpp
+@@ -1,4 +1,5 @@
+ #include "opengl_Wrapper.h"
++#include "cvnx_prof.h"
+ #include "opengl_WrappedFunctions.h"
+ #include "Graphics/OpenGLContext/GLFunctions.h"
+ #include <memory>
+@@ -141,7 +142,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlBlendFuncCommand::get(sfactor, dfactor));
+ 		else
+-			ptrBlendFunc(sfactor, dfactor);
++			{ CVNX_GL("BlendFunc"); ptrBlendFunc(sfactor, dfactor); }
+ 	}
+ 
+ 	void FunctionWrapper::wrBlendFuncSeparate(GLenum sfactorcolor, GLenum dfactorcolor, GLenum sfactoralpha, GLenum dfactoralpha)
+@@ -149,7 +150,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlBlendFuncSeparateCommand::get(sfactorcolor, dfactorcolor, sfactoralpha, dfactoralpha));
+ 		else
+-			ptrBlendFuncSeparate(sfactorcolor, dfactorcolor, sfactoralpha, dfactoralpha);
++			{ CVNX_GL("BlendFuncSeparate"); ptrBlendFuncSeparate(sfactorcolor, dfactorcolor, sfactoralpha, dfactoralpha); }
+ 	}
+ 
+ 
+@@ -158,7 +159,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlPixelStoreiCommand::get(pname, param));
+ 		else
+-			ptrPixelStorei(pname, param);
++			{ CVNX_GL("PixelStorei"); ptrPixelStorei(pname, param); }
+ 	}
+ 
+ 	void FunctionWrapper::wrClearColor(GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha)
+@@ -166,7 +167,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlClearColorCommand::get(red, green, blue, alpha));
+ 		else
+-			ptrClearColor(red, green, blue, alpha);
++			{ CVNX_GL("ClearColor"); ptrClearColor(red, green, blue, alpha); }
+ 	}
+ 
+ 	void FunctionWrapper::wrCullFace(GLenum mode)
+@@ -174,7 +175,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlCullFaceCommand::get(mode));
+ 		else
+-			ptrCullFace(mode);
++			{ CVNX_GL("CullFace"); ptrCullFace(mode); }
+ 	}
+ 
+ 	void FunctionWrapper::wrDepthFunc(GLenum func)
+@@ -182,7 +183,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlDepthFuncCommand::get(func));
+ 		else
+-			ptrDepthFunc(func);
++			{ CVNX_GL("DepthFunc"); ptrDepthFunc(func); }
+ 	}
+ 
+ 	void FunctionWrapper::wrDepthMask(GLboolean flag)
+@@ -190,7 +191,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlDepthMaskCommand::get(flag));
+ 		else
+-			ptrDepthMask(flag);
++			{ CVNX_GL("DepthMask"); ptrDepthMask(flag); }
+ 	}
+ 
+ 	void FunctionWrapper::wrDisable(GLenum cap)
+@@ -198,7 +199,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlDisableCommand::get(cap));
+ 		else
+-			ptrDisable(cap);
++			{ CVNX_GL("Disable"); ptrDisable(cap); }
+ 	}
+ 
+ 	void FunctionWrapper::wrEnable(GLenum cap)
+@@ -206,7 +207,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlEnableCommand::get(cap));
+ 		else
+-			ptrEnable(cap);
++			{ CVNX_GL("Enable"); ptrEnable(cap); }
+ 	}
+ 
+ 	void FunctionWrapper::wrDisablei(GLenum target, GLuint index)
+@@ -214,7 +215,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlDisableiCommand::get(target, index));
+ 		else
+-			ptrDisablei(target, index);
++			{ CVNX_GL("Disablei"); ptrDisablei(target, index); }
+ 	}
+ 
+ 	void FunctionWrapper::wrEnablei(GLenum target, GLuint index)
+@@ -222,7 +223,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlEnableiCommand::get(target, index));
+ 		else
+-			ptrEnablei(target, index);
++			{ CVNX_GL("Enablei"); ptrEnablei(target, index); }
+ 	}
+ 
+ 	void FunctionWrapper::wrPolygonOffset(GLfloat factor, GLfloat units)
+@@ -230,7 +231,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlPolygonOffsetCommand::get(factor, units));
+ 		else
+-			ptrPolygonOffset(factor, units);
++			{ CVNX_GL("PolygonOffset"); ptrPolygonOffset(factor, units); }
+ 	}
+ 
+ 	void FunctionWrapper::wrScissor(GLint x, GLint y, GLsizei width, GLsizei height)
+@@ -238,7 +239,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlScissorCommand::get(x, y, width, height));
+ 		else
+-			ptrScissor(x, y, width, height);
++			{ CVNX_GL("Scissor"); ptrScissor(x, y, width, height); }
+ 	}
+ 
+ 	void FunctionWrapper::wrViewport(GLint x, GLint y, GLsizei width, GLsizei height)
+@@ -246,7 +247,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlViewportCommand::get(x, y, width, height));
+ 		else
+-			ptrViewport(x, y, width, height);
++			{ CVNX_GL("Viewport"); ptrViewport(x, y, width, height); }
+ 	}
+ 
+ 	void FunctionWrapper::wrBindTexture(GLenum target, GLuint texture)
+@@ -254,7 +255,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlBindTextureCommand::get(target, texture));
+ 		else
+-			ptrBindTexture(target, texture);
++			{ CVNX_GL("BindTexture"); ptrBindTexture(target, texture); }
+ 	}
+ 
+ 	void FunctionWrapper::wrTexImage2D(GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void *pixels)
+@@ -275,7 +276,7 @@ namespace opengl {
+ 				format, type, data));
+ 		}
+ 		else
+-			ptrTexImage2D(target, level, internalformat, width, height, border, format, type, pixels);
++			{ CVNX_GL("TexImage2D"); ptrTexImage2D(target, level, internalformat, width, height, border, format, type, pixels); }
+ 	}
+ 
+ 	void FunctionWrapper::wrTexParameteri(GLenum target, GLenum pname, GLint param)
+@@ -283,7 +284,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlTexParameteriCommand::get(target, pname, param));
+ 		else
+-			ptrTexParameteri(target, pname, param);
++			{ CVNX_GL("TexParameteri"); ptrTexParameteri(target, pname, param); }
+ 	}
+ 
+ 	void FunctionWrapper::wrGetIntegerv(GLenum pname, GLint* data)
+@@ -291,7 +292,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlGetIntegervCommand::get(pname, data));
+ 		else
+-			ptrGetIntegerv(pname, data);
++			{ CVNX_GL("GetIntegerv"); ptrGetIntegerv(pname, data); }
+ 	}
+ 
+ 	const GLubyte* FunctionWrapper::wrGetString(GLenum name)
+@@ -301,7 +302,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlGetStringCommand::get(name, returnValue));
+ 		else
+-			returnValue = ptrGetString(name);
++			{ CVNX_GL("GetString"); returnValue = ptrGetString(name); }
+ 
+ 		return returnValue;
+ 	}
+@@ -316,7 +317,7 @@ namespace opengl {
+ 				executeCommand(GlReadPixelsCommand::get(x, y, width, height, format, type, pixels));
+ 			}
+ 		else
+-			ptrReadPixels(x, y, width, height, format, type, pixels);
++			{ CVNX_GL("ReadPixels"); ptrReadPixels(x, y, width, height, format, type, pixels); }
+ 	}
+ 
+ 	void  FunctionWrapper::wrTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void *pixels)
+@@ -335,7 +336,7 @@ namespace opengl {
+ 
+ 			executeCommand(GlTexSubImage2DUnbufferedCommand::get(target, level, xoffset, yoffset, width, height, format, type, data));
+ 		} else
+-			ptrTexSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels);
++			{ CVNX_GL("TexSubImage2D"); ptrTexSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels); }
+ 	}
+ 
+ 	void FunctionWrapper::wrDrawArrays(GLenum mode, GLint first, GLsizei count)
+@@ -349,7 +350,7 @@ namespace opengl {
+ 				executeCommand(GlDrawArraysUnbufferedCommand::get(mode, first, count, buffer));
+ 			}
+ 		} else {
+-			ptrDrawArrays(mode, first, count);
++			{ CVNX_GL("DrawArrays"); ptrDrawArrays(mode, first, count); }
+ 		}
+ 	}
+ 
+@@ -361,7 +362,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlGetErrorCommand::get(returnValue));
+ 		else
+-			returnValue = ptrGetError();
++			{ CVNX_GL("GetError"); returnValue = ptrGetError(); }
+ 
+ 		return returnValue;
+ #else
+@@ -372,7 +373,7 @@ namespace opengl {
+ 	void FunctionWrapper::wrDrawElements(GLenum mode, GLsizei count, GLenum type, const void *indices)
+ 	{
+ 		if (!m_threaded_wrapper) {
+-			ptrDrawElements(mode, count, type, indices);
++			{ CVNX_GL("DrawElements"); ptrDrawElements(mode, count, type, indices); }
+ 			return;
+ 		}
+ 
+@@ -425,7 +426,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlLineWidthCommand::get(width));
+ 		else
+-			ptrLineWidth(width);
++			{ CVNX_GL("LineWidth"); ptrLineWidth(width); }
+ 	}
+ 
+ 	void FunctionWrapper::wrClear(GLbitfield mask)
+@@ -433,13 +434,13 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlClearCommand::get(mask));
+ 		else
+-			ptrClear(mask);
++			{ CVNX_GL("Clear"); ptrClear(mask); }
+ 	}
+ 
+ 	void FunctionWrapper::wrClearBufferfv(GLenum buffer, GLint drawbuffer, const GLfloat *value)
+ 	{
+ 		if (!m_threaded_wrapper) {
+-			ptrClearBufferfv(buffer, drawbuffer, value);
++			{ CVNX_GL("ClearBufferfv"); ptrClearBufferfv(buffer, drawbuffer, value); }
+ 			return;
+ 		}
+ 
+@@ -466,7 +467,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executePriorityCommand(GlGetFloatvCommand::get(pname, data));
+ 		else
+-			ptrGetFloatv(pname, data);
++			{ CVNX_GL("GetFloatv"); ptrGetFloatv(pname, data); }
+ 	}
+ 
+ 	void FunctionWrapper::wrDeleteTextures(GLsizei n, const GLuint *textures)
+@@ -476,7 +477,7 @@ namespace opengl {
+ 			executeCommand(GlDeleteTexturesCommand::get(n, texture));
+ 		}
+ 		else
+-			ptrDeleteTextures(n, textures);
++			{ CVNX_GL("DeleteTextures"); ptrDeleteTextures(n, textures); }
+ 	}
+ 
+ 	void FunctionWrapper::wrGenTextures(GLsizei n, GLuint* textures)
+@@ -484,7 +485,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executePriorityCommand(GlGenTexturesCommand::get(n, textures));
+ 		else
+-			ptrGenTextures(n, textures);
++			{ CVNX_GL("GenTextures"); ptrGenTextures(n, textures); }
+ 	}
+ 
+ 	void FunctionWrapper::wrTexParameterf(GLenum target, GLenum pname, GLfloat param)
+@@ -492,7 +493,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlTexParameterfCommand::get(target, pname, param));
+ 		else
+-			ptrTexParameterf(target, pname, param);
++			{ CVNX_GL("TexParameterf"); ptrTexParameterf(target, pname, param); }
+ 	}
+ 
+ 	void FunctionWrapper::wrActiveTexture(GLenum texture)
+@@ -500,7 +501,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlActiveTextureCommand::get(texture));
+ 		else
+-			ptrActiveTexture(texture);
++			{ CVNX_GL("ActiveTexture"); ptrActiveTexture(texture); }
+ 	}
+ 
+ 	void FunctionWrapper::wrBlendColor(GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha)
+@@ -508,7 +509,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlBlendColorCommand::get(red, green, blue, alpha));
+ 		else
+-			ptrBlendColor(red, green, blue, alpha);
++			{ CVNX_GL("BlendColor"); ptrBlendColor(red, green, blue, alpha); }
+ 	}
+ 
+ 	void FunctionWrapper::wrReadBuffer(GLenum src)
+@@ -516,7 +517,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlReadBufferCommand::get(src));
+ 		else
+-			ptrReadBuffer(src);
++			{ CVNX_GL("ReadBuffer"); ptrReadBuffer(src); }
+ 	}
+ 
+ 	GLuint FunctionWrapper::wrCreateShader(GLenum type)
+@@ -526,7 +527,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlCreateShaderCommand::get(type, returnValue));
+ 		else
+-			returnValue = ptrCreateShader(type);
++			{ CVNX_GL("CreateShader"); returnValue = ptrCreateShader(type); }
+ 
+ 		return returnValue;
+ 	}
+@@ -536,7 +537,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlCompileShaderCommand::get(shader));
+ 		else
+-			ptrCompileShader(shader);
++			{ CVNX_GL("CompileShader"); ptrCompileShader(shader); }
+ 	}
+ 
+ 	void FunctionWrapper::wrShaderSource(GLuint shader, GLsizei count, const GLchar *const*string, const GLint *length)
+@@ -558,7 +559,7 @@ namespace opengl {
+ 
+ 			executeCommand(GlShaderSourceCommand::get(shader, stringData));
+ 		} else
+-			ptrShaderSource(shader, count, string, length);
++			{ CVNX_GL("ShaderSource"); ptrShaderSource(shader, count, string, length); }
+ 	}
+ 
+ 	GLuint FunctionWrapper::wrCreateProgram()
+@@ -568,7 +569,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlCreateProgramCommand::get(returnValue));
+ 		else
+-			returnValue = ptrCreateProgram();
++			{ CVNX_GL("CreateProgram"); returnValue = ptrCreateProgram(); }
+ 
+ 		return returnValue;
+ 	}
+@@ -578,7 +579,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlAttachShaderCommand::get(program, shader));
+ 		else
+-			ptrAttachShader(program, shader);
++			{ CVNX_GL("AttachShader"); ptrAttachShader(program, shader); }
+ 	}
+ 
+ 	void FunctionWrapper::wrLinkProgram(GLuint program)
+@@ -586,7 +587,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlLinkProgramCommand::get(program));
+ 		else
+-			ptrLinkProgram(program);
++			{ CVNX_GL("LinkProgram"); ptrLinkProgram(program); }
+ 	}
+ 
+ 	void FunctionWrapper::wrMaxShaderCompilerThreads(GLuint count)
+@@ -594,9 +595,9 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlMaxShaderCompilerThreadsCommand::get(count));
+ 		else if (ptrMaxShaderCompilerThreadsARB != nullptr)
+-			ptrMaxShaderCompilerThreadsARB(count);
++			{ CVNX_GL("MaxShaderCompilerThreadsARB"); ptrMaxShaderCompilerThreadsARB(count); }
+ 		else if (ptrMaxShaderCompilerThreadsKHR != nullptr)
+-			ptrMaxShaderCompilerThreadsKHR(count);
++			{ CVNX_GL("MaxShaderCompilerThreadsKHR"); ptrMaxShaderCompilerThreadsKHR(count); }
+ 	}
+ 
+ 	void FunctionWrapper::wrUseProgram(GLuint program)
+@@ -604,7 +605,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlUseProgramCommand::get(program));
+ 		else
+-			ptrUseProgram(program);
++			{ CVNX_GL("UseProgram"); ptrUseProgram(program); }
+ 	}
+ 
+ 	GLint FunctionWrapper::wrGetUniformLocation(GLuint program, const GLchar *name)
+@@ -614,7 +615,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlGetUniformLocationCommand::get(program, name, returnValue));
+ 		else
+-			returnValue = ptrGetUniformLocation(program, name);
++			{ CVNX_GL("GetUniformLocation"); returnValue = ptrGetUniformLocation(program, name); }
+ 
+ 		return returnValue;
+ 	}
+@@ -624,7 +625,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlUniform1iCommand::get(location, v0));
+ 		else
+-			ptrUniform1i(location, v0);
++			{ CVNX_GL("Uniform1i"); ptrUniform1i(location, v0); }
+ 	}
+ 
+ 	void FunctionWrapper::wrUniform1f(GLint location, GLfloat v0)
+@@ -632,7 +633,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlUniform1fCommand::get(location, v0));
+ 		else
+-			ptrUniform1f(location, v0);
++			{ CVNX_GL("Uniform1f"); ptrUniform1f(location, v0); }
+ 	}
+ 
+ 	void FunctionWrapper::wrUniform2f(GLint location, GLfloat v0, GLfloat v1)
+@@ -640,7 +641,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlUniform2fCommand::get(location, v0, v1));
+ 		else
+-			ptrUniform2f(location, v0, v1);
++			{ CVNX_GL("Uniform2f"); ptrUniform2f(location, v0, v1); }
+ 	}
+ 
+ 	void FunctionWrapper::wrUniform2i(GLint location, GLint v0, GLint v1)
+@@ -648,7 +649,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlUniform2iCommand::get(location, v0, v1));
+ 		else
+-			ptrUniform2i(location, v0, v1);
++			{ CVNX_GL("Uniform2i"); ptrUniform2i(location, v0, v1); }
+ 	}
+ 
+ 	void FunctionWrapper::wrUniform4i(GLint location, GLint v0, GLint v1, GLint v2, GLint v3)
+@@ -656,7 +657,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlUniform4iCommand::get(location, v0, v1, v2, v3));
+ 		else
+-			ptrUniform4i(location, v0, v1, v2, v3);
++			{ CVNX_GL("Uniform4i"); ptrUniform4i(location, v0, v1, v2, v3); }
+ 	}
+ 
+ 
+@@ -665,7 +666,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlUniform4fCommand::get(location, v0, v1, v2, v3));
+ 		else
+-			ptrUniform4f(location, v0, v1, v2, v3);
++			{ CVNX_GL("Uniform4f"); ptrUniform4f(location, v0, v1, v2, v3); }
+ 	}
+ 
+ 	void FunctionWrapper::wrUniform3fv(GLint location, GLsizei count, const GLfloat *value)
+@@ -674,7 +675,7 @@ namespace opengl {
+ 			PoolBufferPointer values = OpenGlCommand::m_ringBufferPool.createPoolBuffer(reinterpret_cast<const char*>(value), 3 * sizeof(GLfloat) * count);
+ 			executeCommand(GlUniform3fvCommand::get(location, count, values));
+ 		} else
+-			ptrUniform3fv(location, count, value);
++			{ CVNX_GL("Uniform3fv"); ptrUniform3fv(location, count, value); }
+ 	}
+ 
+ 	void FunctionWrapper::wrUniform4fv(GLint location, GLsizei count, const GLfloat *value)
+@@ -683,7 +684,7 @@ namespace opengl {
+ 			PoolBufferPointer values = OpenGlCommand::m_ringBufferPool.createPoolBuffer(reinterpret_cast<const char*>(value), 4 * sizeof(GLfloat) * count);
+ 			executeCommand(GlUniform4fvCommand::get(location, count, values));
+ 		} else
+-			ptrUniform4fv(location, count, value);
++			{ CVNX_GL("Uniform4fv"); ptrUniform4fv(location, count, value); }
+ 	}
+ 
+ 	void FunctionWrapper::wrDetachShader(GLuint program, GLuint shader)
+@@ -691,7 +692,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlDetachShaderCommand::get(program, shader));
+ 		else
+-			ptrDetachShader(program, shader);
++			{ CVNX_GL("DetachShader"); ptrDetachShader(program, shader); }
+ 	}
+ 
+ 	void FunctionWrapper::wrDeleteShader(GLuint shader)
+@@ -699,7 +700,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlDeleteShaderCommand::get(shader));
+ 		else
+-			ptrDeleteShader(shader);
++			{ CVNX_GL("DeleteShader"); ptrDeleteShader(shader); }
+ 	}
+ 
+ 	void FunctionWrapper::wrDeleteProgram(GLuint program)
+@@ -707,7 +708,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlDeleteProgramCommand::get(program));
+ 		else
+-			ptrDeleteProgram(program);
++			{ CVNX_GL("DeleteProgram"); ptrDeleteProgram(program); }
+ 	}
+ 
+ 	void FunctionWrapper::wrGetProgramInfoLog(GLuint program, GLsizei bufSize, GLsizei* length, GLchar *infoLog)
+@@ -715,7 +716,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlGetProgramInfoLogCommand::get(program, bufSize, length, infoLog));
+ 		else
+-			ptrGetProgramInfoLog(program, bufSize, length, infoLog);
++			{ CVNX_GL("GetProgramInfoLog"); ptrGetProgramInfoLog(program, bufSize, length, infoLog); }
+ 	}
+ 
+ 	void FunctionWrapper::wrGetShaderInfoLog(GLuint shader, GLsizei bufSize, GLsizei* length, GLchar *infoLog)
+@@ -723,7 +724,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlGetShaderInfoLogCommand::get(shader, bufSize, length, infoLog));
+ 		else
+-			ptrGetShaderInfoLog(shader, bufSize, length, infoLog);
++			{ CVNX_GL("GetShaderInfoLog"); ptrGetShaderInfoLog(shader, bufSize, length, infoLog); }
+ 	}
+ 
+ 	void FunctionWrapper::wrGetShaderiv(GLuint shader, GLenum pname, GLint* params)
+@@ -731,7 +732,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlGetShaderivCommand::get(shader, pname, params));
+ 		else
+-			ptrGetShaderiv(shader, pname, params);
++			{ CVNX_GL("GetShaderiv"); ptrGetShaderiv(shader, pname, params); }
+ 	}
+ 
+ 	void FunctionWrapper::wrGetProgramiv(GLuint program, GLenum pname, GLint* params)
+@@ -739,7 +740,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlGetProgramivCommand::get(program, pname, params));
+ 		else
+-			ptrGetProgramiv(program, pname, params);
++			{ CVNX_GL("GetProgramiv"); ptrGetProgramiv(program, pname, params); }
+ 	}
+ 
+ 	void FunctionWrapper::wrEnableVertexAttribArray(GLuint index)
+@@ -749,7 +750,7 @@ namespace opengl {
+ 			executeCommand(GlEnableVertexAttribArrayCommand::get(index));
+ 		}
+ 		else
+-			ptrEnableVertexAttribArray(index);
++			{ CVNX_GL("EnableVertexAttribArray"); ptrEnableVertexAttribArray(index); }
+ 	}
+ 
+ 	void FunctionWrapper::wrDisableVertexAttribArray(GLuint index)
+@@ -758,7 +759,7 @@ namespace opengl {
+ 			GlVertexAttribPointerManager::disableVertexAttributeIndex(index);
+ 			executeCommand(GlDisableVertexAttribArrayCommand::get(index));
+ 		} else
+-			ptrDisableVertexAttribArray(index);
++			{ CVNX_GL("DisableVertexAttribArray"); ptrDisableVertexAttribArray(index); }
+ 	}
+ 
+ 	void FunctionWrapper::wrVertexAttribPointer(GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void *pointer)
+@@ -772,7 +773,7 @@ namespace opengl {
+ 			}
+ 		}
+ 		else
+-			ptrVertexAttribPointer(index, size, type, normalized, stride, pointer);
++			{ CVNX_GL("VertexAttribPointer"); ptrVertexAttribPointer(index, size, type, normalized, stride, pointer); }
+ 	}
+ 
+ 	void FunctionWrapper::wrBindAttribLocation(GLuint program, GLuint index, const GLchar *name)
+@@ -780,7 +781,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlBindAttribLocationCommand::get(program, index, name));
+ 		else
+-			ptrBindAttribLocation(program, index, name);
++			{ CVNX_GL("BindAttribLocation"); ptrBindAttribLocation(program, index, name); }
+ 	}
+ 
+ 	void FunctionWrapper::wrVertexAttrib1f(GLuint index, GLfloat x)
+@@ -788,7 +789,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlVertexAttrib1fCommand::get(index, x));
+ 		else
+-			ptrVertexAttrib1f(index, x);
++			{ CVNX_GL("VertexAttrib1f"); ptrVertexAttrib1f(index, x); }
+ 	}
+ 
+ 	void FunctionWrapper::wrVertexAttrib4f(GLuint index, GLfloat x, GLfloat y, GLfloat z, GLfloat w)
+@@ -796,7 +797,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlVertexAttrib4fCommand::get(index, x, y, z, w));
+ 		else
+-			ptrVertexAttrib4f(index, x, y, z, w);
++			{ CVNX_GL("VertexAttrib4f"); ptrVertexAttrib4f(index, x, y, z, w); }
+ 	}
+ 
+ 	void FunctionWrapper::wrVertexAttrib4fv(GLuint index, const GLfloat *v)
+@@ -805,7 +806,7 @@ namespace opengl {
+ 			PoolBufferPointer values = OpenGlCommand::m_ringBufferPool.createPoolBuffer(reinterpret_cast<const char*>(v), 4 * sizeof(GLfloat));
+ 			executeCommand(GlVertexAttrib4fvCommand::get(index, values));
+ 		} else
+-			ptrVertexAttrib4fv(index, v);
++			{ CVNX_GL("VertexAttrib4fv"); ptrVertexAttrib4fv(index, v); }
+ 	}
+ 
+ 	void FunctionWrapper::wrDepthRangef(GLfloat n, GLfloat f)
+@@ -813,7 +814,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlDepthRangefCommand::get(n, f));
+ 		else
+-			ptrDepthRangef(n, f);
++			{ CVNX_GL("DepthRangef"); ptrDepthRangef(n, f); }
+ 	}
+ 
+ 	void FunctionWrapper::wrClearDepthf(GLfloat d)
+@@ -821,7 +822,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlClearDepthfCommand::get(d));
+ 		else
+-			ptrClearDepthf(d);
++			{ CVNX_GL("ClearDepthf"); ptrClearDepthf(d); }
+ 	}
+ 
+ 	void FunctionWrapper::wrDrawBuffers(GLsizei n, const GLenum *bufs)
+@@ -830,7 +831,7 @@ namespace opengl {
+ 			PoolBufferPointer bufsPtr = OpenGlCommand::m_ringBufferPool.createPoolBuffer(reinterpret_cast<const char*>(bufs), n*sizeof(GLenum));
+ 			executeCommand(GlDrawBuffersCommand::get(n, bufsPtr));
+ 		} else
+-			ptrDrawBuffers(n, bufs);
++			{ CVNX_GL("DrawBuffers"); ptrDrawBuffers(n, bufs); }
+ 	}
+ 
+ 	void FunctionWrapper::wrGenFramebuffers(GLsizei n, GLuint* framebuffers)
+@@ -838,7 +839,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executePriorityCommand(GlGenFramebuffersCommand::get(n, framebuffers));
+ 		else
+-			ptrGenFramebuffers(n, framebuffers);
++			{ CVNX_GL("GenFramebuffers"); ptrGenFramebuffers(n, framebuffers); }
+ 	}
+ 
+ 	void FunctionWrapper::wrBindFramebuffer(GLenum target, GLuint framebuffer)
+@@ -846,7 +847,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlBindFramebufferCommand::get(target, framebuffer));
+ 		else
+-			ptrBindFramebuffer(target, framebuffer);
++			{ CVNX_GL("BindFramebuffer"); ptrBindFramebuffer(target, framebuffer); }
+ 	}
+ 
+ 	void FunctionWrapper::wrDeleteFramebuffers(GLsizei n, const GLuint *framebuffers)
+@@ -855,7 +856,7 @@ namespace opengl {
+ 			PoolBufferPointer framebuffersPtr = OpenGlCommand::m_ringBufferPool.createPoolBuffer(reinterpret_cast<const char*>(framebuffers), n*sizeof(GLuint));
+ 			executeCommand(GlDeleteFramebuffersCommand::get(n, framebuffersPtr));
+ 		} else
+-			ptrDeleteFramebuffers(n, framebuffers);
++			{ CVNX_GL("DeleteFramebuffers"); ptrDeleteFramebuffers(n, framebuffers); }
+ 	}
+ 
+ 	void FunctionWrapper::wrFramebufferTexture2D(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level)
+@@ -863,7 +864,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlFramebufferTexture2DCommand::get(target, attachment, textarget, texture, level));
+ 		else
+-			ptrFramebufferTexture2D(target, attachment, textarget, texture, level);
++			{ CVNX_GL("FramebufferTexture2D"); ptrFramebufferTexture2D(target, attachment, textarget, texture, level); }
+ 	}
+ 
+ 	void FunctionWrapper::wrTexImage2DMultisample(GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLboolean fixedsamplelocations)
+@@ -871,7 +872,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlTexImage2DMultisampleCommand::get(target, samples, internalformat, width, height, fixedsamplelocations));
+ 		else
+-			ptrTexImage2DMultisample(target, samples, internalformat, width, height, fixedsamplelocations);
++			{ CVNX_GL("TexImage2DMultisample"); ptrTexImage2DMultisample(target, samples, internalformat, width, height, fixedsamplelocations); }
+ 	}
+ 
+ 	void FunctionWrapper::wrTexStorage2DMultisample(GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLboolean fixedsamplelocations)
+@@ -879,7 +880,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlTexStorage2DMultisampleCommand::get(target, samples, internalformat, width, height, fixedsamplelocations));
+ 		else
+-			ptrTexStorage2DMultisample(target, samples, internalformat, width, height, fixedsamplelocations);
++			{ CVNX_GL("TexStorage2DMultisample"); ptrTexStorage2DMultisample(target, samples, internalformat, width, height, fixedsamplelocations); }
+ 	}
+ 
+ 	void FunctionWrapper::wrGenRenderbuffers(GLsizei n, GLuint* renderbuffers)
+@@ -887,7 +888,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executePriorityCommand(GlGenRenderbuffersCommand::get(n, renderbuffers));
+ 		else
+-			ptrGenRenderbuffers(n, renderbuffers);
++			{ CVNX_GL("GenRenderbuffers"); ptrGenRenderbuffers(n, renderbuffers); }
+ 	}
+ 
+ 	void FunctionWrapper::wrBindRenderbuffer(GLenum target, GLuint renderbuffer)
+@@ -895,7 +896,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlBindRenderbufferCommand::get(target, renderbuffer));
+ 		else
+-			ptrBindRenderbuffer(target, renderbuffer);
++			{ CVNX_GL("BindRenderbuffer"); ptrBindRenderbuffer(target, renderbuffer); }
+ 	}
+ 
+ 	void FunctionWrapper::wrRenderbufferStorage(GLenum target, GLenum internalformat, GLsizei width, GLsizei height)
+@@ -903,7 +904,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlRenderbufferStorageCommand::get(target, internalformat, width, height));
+ 		else
+-			ptrRenderbufferStorage(target, internalformat, width, height);
++			{ CVNX_GL("RenderbufferStorage"); ptrRenderbufferStorage(target, internalformat, width, height); }
+ 	}
+ 
+ 	void FunctionWrapper::wrDeleteRenderbuffers(GLsizei n, const GLuint *renderbuffers)
+@@ -912,7 +913,7 @@ namespace opengl {
+ 			PoolBufferPointer renderbuffersPtr = OpenGlCommand::m_ringBufferPool.createPoolBuffer(reinterpret_cast<const char*>(renderbuffers), n*sizeof(GLuint));
+ 			executeCommand(GlDeleteRenderbuffersCommand::get(n, renderbuffersPtr));
+ 		} else
+-			ptrDeleteRenderbuffers(n, renderbuffers);
++			{ CVNX_GL("DeleteRenderbuffers"); ptrDeleteRenderbuffers(n, renderbuffers); }
+ 	}
+ 
+ 	void FunctionWrapper::wrFramebufferRenderbuffer(GLenum target, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer)
+@@ -920,7 +921,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlFramebufferRenderbufferCommand::get(target, attachment, renderbuffertarget, renderbuffer));
+ 		else
+-			ptrFramebufferRenderbuffer(target, attachment, renderbuffertarget, renderbuffer);
++			{ CVNX_GL("FramebufferRenderbuffer"); ptrFramebufferRenderbuffer(target, attachment, renderbuffertarget, renderbuffer); }
+ 	}
+ 
+ 	GLenum FunctionWrapper::wrCheckFramebufferStatus(GLenum target)
+@@ -931,7 +932,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlCheckFramebufferStatusCommand::get(target, returnValue));
+ 		else
+-			returnValue = ptrCheckFramebufferStatus(target);
++			{ CVNX_GL("CheckFramebufferStatus"); returnValue = ptrCheckFramebufferStatus(target); }
+ 
+ 		return returnValue;
+ #else
+@@ -944,7 +945,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlBlitFramebufferCommand::get(srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, mask, filter));
+ 		else
+-			ptrBlitFramebuffer(srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, mask, filter);
++			{ CVNX_GL("BlitFramebuffer"); ptrBlitFramebuffer(srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, mask, filter); }
+ 	}
+ 
+ 	void FunctionWrapper::wrGenVertexArrays(GLsizei n, GLuint* arrays)
+@@ -952,7 +953,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executePriorityCommand(GlGenVertexArraysCommand::get(n, arrays));
+ 		else
+-			ptrGenVertexArrays(n, arrays);
++			{ CVNX_GL("GenVertexArrays"); ptrGenVertexArrays(n, arrays); }
+ 	}
+ 
+ 	void FunctionWrapper::wrBindVertexArray(GLuint array)
+@@ -960,7 +961,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlBindVertexArrayCommand::get(array));
+ 		else
+-			ptrBindVertexArray(array);
++			{ CVNX_GL("BindVertexArray"); ptrBindVertexArray(array); }
+ 	}
+ 
+ 	void FunctionWrapper::wrDeleteVertexArrays(GLsizei n, const GLuint *arrays)
+@@ -969,7 +970,7 @@ namespace opengl {
+ 			PoolBufferPointer arraysPtr = OpenGlCommand::m_ringBufferPool.createPoolBuffer(reinterpret_cast<const char*>(arrays), n*sizeof(GLuint));
+ 			executeCommand(GlDeleteVertexArraysCommand::get(n, arraysPtr));
+ 		} else
+-			ptrDeleteVertexArrays(n, arrays);
++			{ CVNX_GL("DeleteVertexArrays"); ptrDeleteVertexArrays(n, arrays); }
+ 	}
+ 
+ 	void FunctionWrapper::wrGenBuffers(GLsizei n, GLuint* buffers)
+@@ -977,7 +978,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executePriorityCommand(GlGenBuffersCommand::get(n, buffers));
+ 		else
+-			ptrGenBuffers(n, buffers);
++			{ CVNX_GL("GenBuffers"); ptrGenBuffers(n, buffers); }
+ 	}
+ 
+ 	void FunctionWrapper::wrBindBuffer(GLenum target, GLuint buffer)
+@@ -987,7 +988,7 @@ namespace opengl {
+ 			executeCommand(GlBindBufferCommand::get(target, buffer));
+ 		}
+ 		else
+-			ptrBindBuffer(target, buffer);
++			{ CVNX_GL("BindBuffer"); ptrBindBuffer(target, buffer); }
+ 	}
+ 
+ 	void  FunctionWrapper::wrBufferData(GLenum target, GLsizeiptr size, const void *data, GLenum usage)
+@@ -1003,7 +1004,7 @@ namespace opengl {
+ 			executeCommand(GlBufferDataCommand::get(target, size, dataPtr, usage));
+ 		}
+ 		else
+-			ptrBufferData(target, size, data, usage);
++			{ CVNX_GL("BufferData"); ptrBufferData(target, size, data, usage); }
+ 	}
+ 
+ 	void FunctionWrapper::wrMapBuffer(GLenum target, GLenum access)
+@@ -1011,7 +1012,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlMapBufferCommand::get(target, access));
+ 		else
+-			ptrMapBuffer(target, access);
++			{ CVNX_GL("MapBuffer"); ptrMapBuffer(target, access); }
+ 	}
+ 
+ 	void* FunctionWrapper::wrMapBufferRange(GLenum target, GLintptr offset, GLsizeiptr length, GLbitfield access)
+@@ -1035,7 +1036,7 @@ namespace opengl {
+ 			}
+ 		}
+ 		else {
+-			returnValue = ptrMapBufferRange(target, offset, length, access);
++			{ CVNX_GL("MapBufferRange"); returnValue = ptrMapBufferRange(target, offset, length, access); }
+ 		}
+ 
+ 		return returnValue;
+@@ -1063,7 +1064,7 @@ namespace opengl {
+ 
+ 			executeCommand(GlUnmapBufferAsyncCommand::get(target));
+ 		} else
+-			returnValue = ptrUnmapBuffer(target);
++			{ CVNX_GL("UnmapBuffer"); returnValue = ptrUnmapBuffer(target); }
+ 
+ 		return returnValue;
+ 	}
+@@ -1075,7 +1076,7 @@ namespace opengl {
+ 			executeCommand(GlDeleteBuffersCommand::get(n, buffersPtr));
+ 		}
+ 		else
+-			ptrDeleteBuffers(n, buffers);
++			{ CVNX_GL("DeleteBuffers"); ptrDeleteBuffers(n, buffers); }
+ 	}
+ 
+ 	void FunctionWrapper::wrBindImageTexture(GLuint unit, GLuint texture, GLint level, GLboolean layered, GLint layer, GLenum access, GLenum format)
+@@ -1083,7 +1084,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlBindImageTextureCommand::get(unit, texture, level, layered, layer, access, format));
+ 		else
+-			ptrBindImageTexture(unit, texture, level, layered, layer, access, format);
++			{ CVNX_GL("BindImageTexture"); ptrBindImageTexture(unit, texture, level, layered, layer, access, format); }
+ 	}
+ 
+ 	void FunctionWrapper::wrMemoryBarrier(GLbitfield barriers)
+@@ -1091,7 +1092,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlMemoryBarrierCommand::get(barriers));
+ 		else
+-			ptrMemoryBarrier(barriers);
++			{ CVNX_GL("MemoryBarrier"); ptrMemoryBarrier(barriers); }
+ 	}
+ 
+ 	void FunctionWrapper::wrTextureBarrier()
+@@ -1099,7 +1100,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlTextureBarrierCommand::get());
+ 		else
+-			ptrTextureBarrier();
++			{ CVNX_GL("TextureBarrier"); ptrTextureBarrier(); }
+ 	}
+ 
+ 	void FunctionWrapper::wrTextureBarrierNV()
+@@ -1107,7 +1108,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlTextureBarrierNVCommand::get());
+ 		else
+-			ptrTextureBarrierNV();
++			{ CVNX_GL("TextureBarrierNV"); ptrTextureBarrierNV(); }
+ 	}
+ 
+ 	const GLubyte* FunctionWrapper::wrGetStringi(GLenum name, GLuint index)
+@@ -1117,7 +1118,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executePriorityCommand(GlGetStringiCommand::get(name, index, returnValue));
+ 		else
+-			returnValue = ptrGetStringi(name, index);
++			{ CVNX_GL("GetStringi"); returnValue = ptrGetStringi(name, index); }
+ 
+ 		return returnValue;
+ 	}
+@@ -1128,7 +1129,7 @@ namespace opengl {
+ 			PoolBufferPointer attachmentsPtr = OpenGlCommand::m_ringBufferPool.createPoolBuffer(reinterpret_cast<const char*>(attachments), numAttachments*sizeof(GLenum));
+ 			executeCommand(GlInvalidateFramebufferCommand::get(target, numAttachments, attachmentsPtr));
+ 		} else
+-			ptrInvalidateFramebuffer(target, numAttachments, attachments);
++			{ CVNX_GL("InvalidateFramebuffer"); ptrInvalidateFramebuffer(target, numAttachments, attachments); }
+ 	}
+ 
+ 	void  FunctionWrapper::wrBufferStorage(GLenum target, GLsizeiptr size, const void *data, GLbitfield flags)
+@@ -1144,7 +1145,7 @@ namespace opengl {
+ 
+ 			executeCommand(GlBufferStorageCommand::get(target, size, dataPtr, flags));
+ 		} else
+-			ptrBufferStorage(target, size, data, flags);
++			{ CVNX_GL("BufferStorage"); ptrBufferStorage(target, size, data, flags); }
+ 	}
+ 
+ 	GLsync FunctionWrapper::wrFenceSync(GLenum condition, GLbitfield flags)
+@@ -1154,7 +1155,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executePriorityCommand(GlFenceSyncCommand::get(condition, flags, returnValue));
+ 		else
+-			returnValue = ptrFenceSync(condition, flags);
++			{ CVNX_GL("FenceSync"); returnValue = ptrFenceSync(condition, flags); }
+ 
+ 		return returnValue;
+ 	}
+@@ -1164,7 +1165,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executePriorityCommand(GlClientWaitSyncCommand::get(sync, flags, timeout));
+ 		else
+-			ptrClientWaitSync(sync, flags, timeout);
++			{ CVNX_GL("ClientWaitSync"); ptrClientWaitSync(sync, flags, timeout); }
+ 	}
+ 
+ 	void FunctionWrapper::wrDeleteSync(GLsync sync)
+@@ -1172,7 +1173,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlDeleteSyncCommand::get(sync));
+ 		else
+-			ptrDeleteSync(sync);
++			{ CVNX_GL("DeleteSync"); ptrDeleteSync(sync); }
+ 	}
+ 
+ 	GLuint FunctionWrapper::wrGetUniformBlockIndex(GLuint program, GLchar *uniformBlockName)
+@@ -1182,7 +1183,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlGetUniformBlockIndexCommand::get(program, uniformBlockName, returnValue));
+ 		else
+-			returnValue = ptrGetUniformBlockIndex(program, uniformBlockName);
++			{ CVNX_GL("GetUniformBlockIndex"); returnValue = ptrGetUniformBlockIndex(program, uniformBlockName); }
+ 
+ 		return returnValue;
+ 	}
+@@ -1192,7 +1193,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlUniformBlockBindingCommand::get(program, uniformBlockIndex, uniformBlockBinding));
+ 		else
+-			ptrUniformBlockBinding(program, uniformBlockIndex, uniformBlockBinding);
++			{ CVNX_GL("UniformBlockBinding"); ptrUniformBlockBinding(program, uniformBlockIndex, uniformBlockBinding); }
+ 	}
+ 
+ 	void FunctionWrapper::wrGetActiveUniformBlockiv(GLuint program, GLuint uniformBlockIndex, GLenum pname, GLint* params)
+@@ -1200,7 +1201,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlGetActiveUniformBlockivCommand::get(program, uniformBlockIndex, pname, params));
+ 		else
+-			ptrGetActiveUniformBlockiv(program, uniformBlockIndex, pname, params);
++			{ CVNX_GL("GetActiveUniformBlockiv"); ptrGetActiveUniformBlockiv(program, uniformBlockIndex, pname, params); }
+ 	}
+ 
+ 	void FunctionWrapper::wrGetUniformIndices(GLuint program, GLsizei uniformCount, const GLchar *const*uniformNames, GLuint* uniformIndices)
+@@ -1208,7 +1209,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlGetUniformIndicesCommand::get(program, uniformCount, uniformNames, uniformIndices));
+ 		else
+-			ptrGetUniformIndices(program, uniformCount, uniformNames, uniformIndices);
++			{ CVNX_GL("GetUniformIndices"); ptrGetUniformIndices(program, uniformCount, uniformNames, uniformIndices); }
+ 	}
+ 
+ 	void FunctionWrapper::wrGetActiveUniformsiv(GLuint program, GLsizei uniformCount, const GLuint *uniformIndices, GLenum pname, GLint* params)
+@@ -1216,7 +1217,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlGetActiveUniformsivCommand::get(program, uniformCount, uniformIndices, pname, params));
+ 		else
+-			ptrGetActiveUniformsiv(program, uniformCount, uniformIndices, pname, params);
++			{ CVNX_GL("GetActiveUniformsiv"); ptrGetActiveUniformsiv(program, uniformCount, uniformIndices, pname, params); }
+ 	}
+ 
+ 	void FunctionWrapper::wrBindBufferBase(GLenum target, GLuint index, GLuint buffer)
+@@ -1224,7 +1225,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlBindBufferBaseCommand::get(target, index, buffer));
+ 		else
+-			ptrBindBufferBase(target, index, buffer);
++			{ CVNX_GL("BindBufferBase"); ptrBindBufferBase(target, index, buffer); }
+ 	}
+ 
+ 	void  FunctionWrapper::wrBufferSubData(GLenum target, GLintptr offset, GLsizeiptr size, const void *data)
+@@ -1237,7 +1238,7 @@ namespace opengl {
+ 
+ 			executeCommand(GlBufferSubDataCommand::get(target, offset, size, dataPtr));
+ 		} else
+-			ptrBufferSubData(target, offset, size, data);
++			{ CVNX_GL("BufferSubData"); ptrBufferSubData(target, offset, size, data); }
+ 	}
+ 
+ 	void FunctionWrapper::wrGetProgramBinary(GLuint program, GLsizei bufSize, GLsizei* length, GLenum* binaryFormat, void *binary)
+@@ -1245,7 +1246,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlGetProgramBinaryCommand::get(program, bufSize, length, binaryFormat, binary));
+ 		else
+-			ptrGetProgramBinary(program, bufSize, length, binaryFormat, binary);
++			{ CVNX_GL("GetProgramBinary"); ptrGetProgramBinary(program, bufSize, length, binaryFormat, binary); }
+ 	}
+ 
+ 	void  FunctionWrapper::wrProgramBinary(GLuint program, GLenum binaryFormat, const void *binary, GLsizei length)
+@@ -1254,7 +1255,7 @@ namespace opengl {
+ 			PoolBufferPointer binaryPtr = OpenGlCommand::m_ringBufferPool.createPoolBuffer(reinterpret_cast<const char*>(binary), length);
+ 			executeCommand(GlProgramBinaryCommand::get(program, binaryFormat, binaryPtr, length));
+ 		} else
+-			ptrProgramBinary(program, binaryFormat, binary, length);
++			{ CVNX_GL("ProgramBinary"); ptrProgramBinary(program, binaryFormat, binary, length); }
+ 	}
+ 
+ 	void FunctionWrapper::wrProgramParameteri(GLuint program, GLenum pname, GLint value)
+@@ -1262,7 +1263,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlProgramParameteriCommand::get(program, pname, value));
+ 		else
+-			ptrProgramParameteri(program, pname, value);
++			{ CVNX_GL("ProgramParameteri"); ptrProgramParameteri(program, pname, value); }
+ 	}
+ 
+ 	void FunctionWrapper::wrTexStorage2D(GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height)
+@@ -1270,7 +1271,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlTexStorage2DCommand::get(target, levels, internalformat, width, height));
+ 		else
+-			ptrTexStorage2D(target, levels, internalformat, width, height);
++			{ CVNX_GL("TexStorage2D"); ptrTexStorage2D(target, levels, internalformat, width, height); }
+ 	}
+ 
+ 	void FunctionWrapper::wrTextureStorage2D(GLuint texture, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height)
+@@ -1278,7 +1279,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlTextureStorage2DCommand::get(texture, levels, internalformat, width, height));
+ 		else
+-			ptrTextureStorage2D(texture, levels, internalformat, width, height);
++			{ CVNX_GL("TextureStorage2D"); ptrTextureStorage2D(texture, levels, internalformat, width, height); }
+ 	}
+ 
+ 	void  FunctionWrapper::wrTextureSubImage2D(GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void *pixels)
+@@ -1297,7 +1298,7 @@ namespace opengl {
+ 			executeCommand(GlTextureSubImage2DUnbufferedCommand::get(texture, level, xoffset, yoffset,
+ 				width, height, format, type, data));
+ 		} else
+-			ptrTextureSubImage2D(texture, level, xoffset, yoffset, width, height, format, type, pixels);
++			{ CVNX_GL("TextureSubImage2D"); ptrTextureSubImage2D(texture, level, xoffset, yoffset, width, height, format, type, pixels); }
+ 	}
+ 
+ 	void FunctionWrapper::wrTextureStorage2DMultisample(GLuint texture, GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLboolean fixedsamplelocations)
+@@ -1305,7 +1306,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlTextureStorage2DMultisampleCommand::get(texture, target, samples, internalformat, width, height, fixedsamplelocations));
+ 		else
+-			ptrTextureStorage2DMultisample(texture, target, samples, internalformat, width, height, fixedsamplelocations);
++			{ CVNX_GL("TextureStorage2DMultisample"); ptrTextureStorage2DMultisample(texture, target, samples, internalformat, width, height, fixedsamplelocations); }
+ 	}
+ 
+ 	void FunctionWrapper::wrTextureParameteri(GLuint texture, GLenum pname, GLint param)
+@@ -1313,7 +1314,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlTextureParameteriCommand::get(texture, pname, param));
+ 		else
+-			ptrTextureParameteri(texture, pname, param);
++			{ CVNX_GL("TextureParameteri"); ptrTextureParameteri(texture, pname, param); }
+ 	}
+ 
+ 	void FunctionWrapper::wrTextureParameterf(GLuint texture, GLenum pname, GLfloat param)
+@@ -1321,7 +1322,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlTextureParameterfCommand::get(texture, pname, param));
+ 		else
+-			ptrTextureParameterf(texture, pname, param);
++			{ CVNX_GL("TextureParameterf"); ptrTextureParameterf(texture, pname, param); }
+ 	}
+ 
+ 	void FunctionWrapper::wrCreateTextures(GLenum target, GLsizei n, GLuint* textures)
+@@ -1329,7 +1330,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executePriorityCommand(GlCreateTexturesCommand::get(target, n, textures));
+ 		else
+-			ptrCreateTextures(target, n, textures);
++			{ CVNX_GL("CreateTextures"); ptrCreateTextures(target, n, textures); }
+ 	}
+ 
+ 	void FunctionWrapper::wrCreateBuffers(GLsizei n, GLuint* buffers)
+@@ -1337,7 +1338,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executePriorityCommand(GlCreateBuffersCommand::get(n, buffers));
+ 		else
+-			ptrCreateBuffers(n, buffers);
++			{ CVNX_GL("CreateBuffers"); ptrCreateBuffers(n, buffers); }
+ 	}
+ 
+ 	void FunctionWrapper::wrCreateFramebuffers(GLsizei n, GLuint* framebuffers)
+@@ -1345,7 +1346,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executePriorityCommand(GlCreateFramebuffersCommand::get(n, framebuffers));
+ 		else
+-			ptrCreateFramebuffers(n, framebuffers);
++			{ CVNX_GL("CreateFramebuffers"); ptrCreateFramebuffers(n, framebuffers); }
+ 	}
+ 
+ 	void FunctionWrapper::wrNamedFramebufferTexture(GLuint framebuffer, GLenum attachment, GLuint texture, GLint level)
+@@ -1353,7 +1354,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlNamedFramebufferTextureCommand::get(framebuffer, attachment, texture, level));
+ 		else
+-			ptrNamedFramebufferTexture(framebuffer, attachment, texture, level);
++			{ CVNX_GL("NamedFramebufferTexture"); ptrNamedFramebufferTexture(framebuffer, attachment, texture, level); }
+ 	}
+ 
+ 	void FunctionWrapper::wrDrawRangeElementsBaseVertex(GLenum mode, GLuint start, GLuint end, GLsizei count, GLenum type,
+@@ -1362,7 +1363,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlDrawRangeElementsBaseVertexCommand::get(mode, start, end, count, type, indices, basevertex));
+ 		else
+-			ptrDrawRangeElementsBaseVertex(mode, start, end, count, type, indices, basevertex);
++			{ CVNX_GL("DrawRangeElementsBaseVertex"); ptrDrawRangeElementsBaseVertex(mode, start, end, count, type, indices, basevertex); }
+ 	}
+ 
+ 	void FunctionWrapper::wrFlushMappedBufferRange(GLenum target, GLintptr offset, GLsizeiptr length)
+@@ -1370,7 +1371,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlFlushMappedBufferRangeCommand::get(target, offset, length));
+ 		else
+-			ptrFlushMappedBufferRange(target, offset, length);
++			{ CVNX_GL("FlushMappedBufferRange"); ptrFlushMappedBufferRange(target, offset, length); }
+ 	}
+ 
+ 	void FunctionWrapper::wrFinish()
+@@ -1378,7 +1379,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlFinishCommand::get());
+ 		else
+-			ptrFinish();
++			{ CVNX_GL("Finish"); ptrFinish(); }
+ 	}
+ 
+ 	void FunctionWrapper::wrFlush()
+@@ -1386,7 +1387,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlFlushCommand::get());
+ 		else
+-			ptrFlush();
++			{ CVNX_GL("Flush"); ptrFlush(); }
+ 	}
+ 
+ 	void FunctionWrapper::wrCopyTexImage2D(GLenum target, GLint level, GLenum internalformat, GLint x, GLint y, GLsizei width, GLsizei height, GLint border)
+@@ -1394,7 +1395,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlCopyTexImage2DCommand::get(target, level, internalformat, x, y, width, height, border));
+ 		else
+-			ptrCopyTexImage2D(target, level, internalformat, x, y, width, height, border);
++			{ CVNX_GL("CopyTexImage2D"); ptrCopyTexImage2D(target, level, internalformat, x, y, width, height, border); }
+ 	}
+ 
+ 	void FunctionWrapper::wrDebugMessageCallback(GLDEBUGPROC callback, const void *userParam)
+@@ -1402,7 +1403,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlDebugMessageCallbackCommand::get(callback, userParam));
+ 		else
+-			ptrDebugMessageCallback(callback, userParam);
++			{ CVNX_GL("DebugMessageCallback"); ptrDebugMessageCallback(callback, userParam); }
+ 	}
+ 
+ 	void FunctionWrapper::wrDebugMessageControl(GLenum source, GLenum type, GLenum severity, GLsizei count, const GLuint *ids, GLboolean enabled)
+@@ -1410,7 +1411,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlDebugMessageControlCommand::get(source, type, severity, count, ids, enabled));
+ 		else
+-			ptrDebugMessageControl(source, type, severity, count, ids, enabled);
++			{ CVNX_GL("DebugMessageControl"); ptrDebugMessageControl(source, type, severity, count, ids, enabled); }
+ 	}
+ 
+ 	void FunctionWrapper::wrEGLImageTargetTexture2DOES(GLenum target, void* image)
+@@ -1418,7 +1419,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlEGLImageTargetTexture2DOESCommand::get(target, image));
+ 		else
+-			ptrEGLImageTargetTexture2DOES(target, image);
++			{ CVNX_GL("EGLImageTargetTexture2DOES"); ptrEGLImageTargetTexture2DOES(target, image); }
+ 	}
+ 
+ 	void FunctionWrapper::wrEGLImageTargetRenderbufferStorageOES(GLenum target, void* image)
+@@ -1426,7 +1427,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(GlEGLImageTargetRenderbufferStorageOESCommand::get(target, image));
+ 		else
+-			ptrEGLImageTargetRenderbufferStorageOES(target, image);
++			{ CVNX_GL("EGLImageTargetRenderbufferStorageOES"); ptrEGLImageTargetRenderbufferStorageOES(target, image); }
+ 	}
+ 
+ #if defined(OS_ANDROID)
+@@ -1437,7 +1438,7 @@ namespace opengl {
+ 		if (m_threaded_wrapper)
+ 			executeCommand(EglGetNativeClientBufferANDROIDCommand::get(buffer, returnValue));
+ 		else
+-			returnValue = ptrGetNativeClientBufferANDROID(buffer);
++			{ CVNX_GL("GetNativeClientBufferANDROID"); returnValue = ptrGetNativeClientBufferANDROID(buffer); }
+ 
+ 		return returnValue;
+ 	}
 diff --git a/src/GraphicsDrawer.cpp b/src/GraphicsDrawer.cpp
-index 9f7796f..9cdf532 100644
+index 9f7796ff..5384ee51 100644
 --- a/src/GraphicsDrawer.cpp
 +++ b/src/GraphicsDrawer.cpp
-@@ -216,7 +216,7 @@ void GraphicsDrawer::updateScissor(FrameBuffer * _pBuffer) const
+@@ -1,3 +1,4 @@
++#include "cvnx_prof.h"
+ #include <algorithm>
+ #include <string>
+ #include <thread>
+@@ -216,7 +217,7 @@ void GraphicsDrawer::updateScissor(FrameBuffer * _pBuffer) const
  		SY1 *= 512.0f / SX1;
  	}
  
@@ -182,7 +1377,7 @@ index 9f7796f..9cdf532 100644
  		_adjustScissorX(SX0, SX1, wnd.getAdjustScale());
  
  	gfxContext.setScissor(roundup(SX0, scaleX), roundup(SY0, scaleY),
-@@ -846,6 +846,19 @@ void GraphicsDrawer::_prepareDrawTriangle(DrawingState _drawingState)
+@@ -846,6 +847,19 @@ void GraphicsDrawer::_prepareDrawTriangle(DrawingState _drawingState)
  	m_modifyVertices = 0;
  }
  
@@ -202,7 +1397,15 @@ index 9f7796f..9cdf532 100644
  bool GraphicsDrawer::_canDraw() const
  {
  	return config.frameBufferEmulation.enable == 0 || frameBufferList().getCurrent() != nullptr;
-@@ -877,7 +890,7 @@ void GraphicsDrawer::drawTriangles()
+@@ -853,6 +867,7 @@ bool GraphicsDrawer::_canDraw() const
+ 
+ void GraphicsDrawer::drawTriangles()
+ {
++	CVNX_ZONE(ZONE_DRAW);
+ 	if (triangles.num == 0 || !_canDraw()) {
+ 		triangles.num = 0;
+ 		triangles.maxElement = 0;
+@@ -877,7 +892,7 @@ void GraphicsDrawer::drawTriangles()
  			maxY = renderAndDrawTriangles(triangles.vertices.data(), triangles.elements.data(), triangles.num, m_bFlatColors, m_statistics);
  		} else {
  			gfxContext.drawTriangles(triParams);
@@ -211,7 +1414,23 @@ index 9f7796f..9cdf532 100644
  		}
  		frameBufferList().setBufferChanged(maxY);
  		if (config.frameBufferEmulation.copyDepthToRDRAM == Config::cdSoftwareRender &&
-@@ -975,7 +988,7 @@ void GraphicsDrawer::drawDMATriangles(u32 _numVtx)
+@@ -900,6 +915,7 @@ void GraphicsDrawer::drawTriangles()
+ 
+ void GraphicsDrawer::drawScreenSpaceTriangle(u32 _numVtx, graphics::DrawModeParam _mode)
+ {
++	CVNX_ZONE(ZONE_DRAW);
+ 	if (_numVtx == 0 || !_canDraw())
+ 		return;
+ 
+@@ -954,6 +970,7 @@ void GraphicsDrawer::drawScreenSpaceTriangle(u32 _numVtx, graphics::DrawModePara
+ 
+ void GraphicsDrawer::drawDMATriangles(u32 _numVtx)
+ {
++	CVNX_ZONE(ZONE_DRAW);
+ 	if (_numVtx == 0 || !_canDraw())
+ 		return;
+ 	_prepareDrawTriangle(DrawingState::Triangle);
+@@ -975,7 +992,7 @@ void GraphicsDrawer::drawDMATriangles(u32 _numVtx)
  		}
  		else {
  			gfxContext.drawTriangles(triParams);
@@ -220,7 +1439,15 @@ index 9f7796f..9cdf532 100644
  		}
  		frameBufferList().setBufferChanged(maxY);
  		if (config.frameBufferEmulation.copyDepthToRDRAM == Config::cdSoftwareRender &&
-@@ -1165,13 +1178,12 @@ void GraphicsDrawer::drawRect(int _ulx, int _uly, int _lrx, int _lry)
+@@ -1119,6 +1136,7 @@ void GraphicsDrawer::drawLine(u32 _v0, u32 _v1, float _width, u32 _flag)
+ 
+ void GraphicsDrawer::drawRect(int _ulx, int _uly, int _lrx, int _lry)
+ {
++	CVNX_ZONE(ZONE_DRAW);
+ 	m_texrectDrawer.draw();
+ 	m_statistics.fillRects++;
+ 
+@@ -1165,13 +1183,12 @@ void GraphicsDrawer::drawRect(int _ulx, int _uly, int _lrx, int _lry)
  	m_rect[3].bc1 = 1.0f;
  
  	DisplayWindow & wnd = dwnd();
@@ -240,7 +1467,15 @@ index 9f7796f..9cdf532 100644
  	}
  
  	Context::DrawRectParameters rectParams;
-@@ -1505,14 +1517,13 @@ void GraphicsDrawer::drawTexturedRect(const TexturedRectParams & _params)
+@@ -1332,6 +1349,7 @@ static bool(*texturedRectSpecial)(const GraphicsDrawer::TexturedRectParams & _pa
+ 
+ void GraphicsDrawer::drawTexturedRect(const TexturedRectParams & _params)
+ {
++	CVNX_ZONE(ZONE_DRAW);
+ 	gSP.changed &= ~CHANGED_GEOMETRYMODE; // Don't update cull mode
+ 	m_drawingState = DrawingState::TexRect;
+ 	m_statistics.texRects++;
+@@ -1505,14 +1523,13 @@ void GraphicsDrawer::drawTexturedRect(const TexturedRectParams & _params)
  
  	if (wnd.isAdjustScreen() && !bUseFbTexture &&
  		(_params.forceAjustScale ||
@@ -262,7 +1497,7 @@ index 9f7796f..9cdf532 100644
  
  	m_rect[0].bc0 = 0.0f;
 diff --git a/src/GraphicsDrawer.h b/src/GraphicsDrawer.h
-index 6da9424..4b3cb8e 100644
+index 6da9424e..4b3cb8ed 100644
 --- a/src/GraphicsDrawer.h
 +++ b/src/GraphicsDrawer.h
 @@ -213,6 +213,7 @@ private:
@@ -274,7 +1509,7 @@ index 6da9424..4b3cb8e 100644
  
  	void _drawOSD(const char *_pText, float _x, float & _y);
 diff --git a/src/RSP.cpp b/src/RSP.cpp
-index b66c782..b159fcc 100644
+index b66c782c..b159fcc6 100644
 --- a/src/RSP.cpp
 +++ b/src/RSP.cpp
 @@ -56,6 +56,7 @@ void _ProcessDList()
@@ -286,7 +1521,7 @@ index b66c782..b159fcc 100644
  		RSP_CheckDLCounter();
  	}
 diff --git a/src/RSP.h b/src/RSP.h
-index bf3ba27..1ea2436 100644
+index bf3ba27e..5df92e61 100644
 --- a/src/RSP.h
 +++ b/src/RSP.h
 @@ -22,7 +22,28 @@ extern RSPInfo RSP;
@@ -320,10 +1555,15 @@ index bf3ba27..1ea2436 100644
  void RSP_Init();
  void RSP_ProcessDList();
 diff --git a/src/Textures.cpp b/src/Textures.cpp
-index 847289a..76c9250 100644
+index 847289ab..c76a069a 100644
 --- a/src/Textures.cpp
 +++ b/src/Textures.cpp
-@@ -802,9 +802,18 @@ void TextureCache::_checkHdTexLimit()
+@@ -1,3 +1,4 @@
++#include "cvnx_prof.h"
+ #include <assert.h>
+ #include <memory.h>
+ #include <algorithm>
+@@ -802,9 +803,18 @@ void TextureCache::_checkHdTexLimit()
  	}
  }
  
@@ -343,8 +1583,16 @@ index 847289a..76c9250 100644
  		CachedTexture& clsTex = m_textures.back();
  		if (clsTex.bHDTexture)
  			m_hdTexCacheSize -= clsTex.textureBytes;
+@@ -2062,6 +2072,7 @@ void TextureCache::toggleDumpTex()
+ 
+ void TextureCache::update(u32 _t)
+ {
++	CVNX_ZONE(ZONE_TEXTURES);
+ 	const gDPTile * pTile = gSP.textureTile[_t];
+ 	switch (pTile->textureMode) {
+ 	case TEXTUREMODE_BGIMAGE:
 diff --git a/src/Textures.h b/src/Textures.h
-index b129458..7173b59 100644
+index b129458f..793ee483 100644
 --- a/src/Textures.h
 +++ b/src/Textures.h
 @@ -70,6 +70,15 @@ struct TextureCache
@@ -375,8 +1623,91 @@ index b129458..7173b59 100644
  #endif
  	u64 m_hdTexCacheSize = 0u;
  };
+diff --git a/src/cvnx_prof.h b/src/cvnx_prof.h
+new file mode 100644
+index 00000000..2a245986
+--- /dev/null
++++ b/src/cvnx_prof.h
+@@ -0,0 +1,77 @@
++#pragma once
++// Switch port profiling of the gfx thread: time inside GL calls (by function) and in a few renderer zones, read by
++// the perf line in switch/render_gliden64.cpp. Plain counters: GLideN64 runs on one thread here (ThreadedVideo off).
++#include <cstdint>
++#if !defined(__aarch64__)
++#include <chrono>
++#endif
++
++namespace cvnxprof {
++
++inline uint64_t ticks() {
++#if defined(__aarch64__)
++    uint64_t value;
++    asm volatile("mrs %0, cntpct_el0" : "=r"(value));
++    return value;
++#else
++    return std::chrono::duration_cast<std::chrono::nanoseconds>(
++        std::chrono::steady_clock::now().time_since_epoch()).count() / 52;
++#endif
++}
++
++struct Slot {
++    const char* name;
++    uint64_t ticks;
++    uint32_t calls;
++};
++
++enum Zone { ZONE_TEXTURES, ZONE_DRAW, ZONE_SWAP, ZONE_SHADER_SAVE, ZONE_COUNT };
++
++constexpr int MAX_SLOTS = 160;
++extern Slot slots[MAX_SLOTS];
++extern int slot_count;
++extern uint64_t gl_ticks;
++extern uint64_t zone_ticks[ZONE_COUNT];
++extern uint64_t zone_gl_ticks[ZONE_COUNT];
++extern int zone_depth[ZONE_COUNT];
++
++int slot(const char* name);
++
++struct GlTimer {
++    int index;
++    uint64_t start;
++
++    explicit GlTimer(int i) : index(i), start(ticks()) {}
++
++    ~GlTimer() {
++        const uint64_t spent = ticks() - start;
++        if (index >= 0) {
++            slots[index].ticks += spent;
++            slots[index].calls++;
++        }
++        gl_ticks += spent;
++    }
++};
++
++// Inclusive time of a zone and the GL time inside it; a zone entered again inside itself counts once.
++struct ZoneTimer {
++    int zone;
++    uint64_t start;
++    uint64_t gl_start;
++
++    explicit ZoneTimer(int z) : zone(z), start(ticks()), gl_start(gl_ticks) {
++        zone_depth[zone]++;
++    }
++
++    ~ZoneTimer() {
++        if (--zone_depth[zone] == 0) {
++            zone_ticks[zone] += ticks() - start;
++            zone_gl_ticks[zone] += gl_ticks - gl_start;
++        }
++    }
++};
++
++}
++
++#define CVNX_GL(name) static const int cvnx_gl_slot_ = cvnxprof::slot(name); cvnxprof::GlTimer cvnx_gl_timer_(cvnx_gl_slot_)
++#define CVNX_ZONE(zone) cvnxprof::ZoneTimer cvnx_zone_timer_(cvnxprof::zone)
 diff --git a/src/gDP.cpp b/src/gDP.cpp
-index a2805c4..44881c1 100644
+index a2805c45..44881c1b 100644
 --- a/src/gDP.cpp
 +++ b/src/gDP.cpp
 @@ -775,6 +775,8 @@ void gDPLoadTLUT( u32 tile, u32 uls, u32 ult, u32 lrs, u32 lrt )
@@ -389,7 +1720,7 @@ index a2805c4..44881c1 100644
  	gDP.scissor.xh = xh;
  	gDP.scissor.yh = yh;
 diff --git a/src/gSP.cpp b/src/gSP.cpp
-index ab5ada9..22e6306 100644
+index ab5ada9d..22e63067 100644
 --- a/src/gSP.cpp
 +++ b/src/gSP.cpp
 @@ -176,6 +176,8 @@ void gSPMatrix( u32 matrix, u8 param )
@@ -438,7 +1769,7 @@ index ab5ada9..22e6306 100644
  			RSP.PCi--;
  		else {
 diff --git a/src/uCodes/F3DEX2.cpp b/src/uCodes/F3DEX2.cpp
-index dc98298..b30ee8b 100644
+index dc982986..eedc677d 100644
 --- a/src/uCodes/F3DEX2.cpp
 +++ b/src/uCodes/F3DEX2.cpp
 @@ -93,7 +93,7 @@ void F3DEX2_MoveWord( u32 w0, u32 w1 )

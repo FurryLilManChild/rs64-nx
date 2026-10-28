@@ -21,6 +21,68 @@
 #include "nx_ram.h"
 #include "nx_settings.h"
 #include "ultramodern/renderer_context.hpp"
+#include "../lib/GLideN64/src/cvnx_prof.h"
+
+#include <algorithm>
+
+namespace cvnxprof {
+
+Slot slots[MAX_SLOTS];
+int slot_count = 0;
+uint64_t gl_ticks = 0;
+uint64_t zone_ticks[ZONE_COUNT];
+uint64_t zone_gl_ticks[ZONE_COUNT];
+int zone_depth[ZONE_COUNT];
+
+int slot(const char* name) {
+    if (slot_count >= MAX_SLOTS) {
+        return -1;
+    }
+
+    slots[slot_count].name = name;
+    return slot_count++;
+}
+
+// One log line for the time since the last call: GL time and zones in ms per frame, then the costliest GL calls.
+void report(uint32_t frames) {
+    const double per_frame = frames ? 1.0 / frames : 0.0;
+    auto ms = [&](uint64_t ticks) { return armTicksToNs(ticks) / 1e6 * per_frame; };
+
+    std::printf("[CVNX] gfx split per frame: GL calls %.1f ms; draw %.1f ms (GL %.1f); textures %.1f ms (GL %.1f); "
+                "swap %.1f ms; shader save %.1f ms in 5 s\n",
+                ms(gl_ticks), ms(zone_ticks[ZONE_DRAW]), ms(zone_gl_ticks[ZONE_DRAW]), ms(zone_ticks[ZONE_TEXTURES]),
+                ms(zone_gl_ticks[ZONE_TEXTURES]), ms(zone_ticks[ZONE_SWAP]),
+                armTicksToNs(zone_ticks[ZONE_SHADER_SAVE]) / 1e6);
+
+    int order[MAX_SLOTS];
+    const int count = slot_count;
+    for (int i = 0; i < count; i++) order[i] = i;
+    std::sort(order, order + count, [](int a, int b) { return slots[a].ticks > slots[b].ticks; });
+
+    char line[512];
+    int used = 0;
+    for (int i = 0; i < count && i < 8 && slots[order[i]].ticks > 0; i++) {
+        const Slot& s = slots[order[i]];
+        used += std::snprintf(line + used, sizeof(line) - used, "%s%s %.2f ms x%.0f", i ? ", " : "", s.name,
+                              ms(s.ticks), s.calls * per_frame);
+        if (used >= (int)sizeof(line)) break;
+    }
+
+    std::printf("[CVNX] top GL calls per frame: %s\n", used ? line : "none");
+
+    for (int i = 0; i < count; i++) {
+        slots[i].ticks = 0;
+        slots[i].calls = 0;
+    }
+
+    gl_ticks = 0;
+    for (int z = 0; z < ZONE_COUNT; z++) {
+        zone_ticks[z] = 0;
+        zone_gl_ticks[z] = 0;
+    }
+}
+
+}
 
 void cvnx_seed_gliden64_config();
 #ifdef CVNX_REMOTE
@@ -159,6 +221,7 @@ namespace {
         cvnx_thread_cpu_report(cpu, sizeof(cpu));
         read_clocks(mhz);
         std::printf("[CVNX] threads: %s; clocks CPU %u, GPU %u, RAM %u MHz\n", cpu, mhz[0], mhz[1], mhz[2]);
+        cvnxprof::report(pass1_samples);
         last = now; last_dl = dl; last_presents = shown;
         pass1_sum_us = 0; pass1_samples = 0; pass1_max_us = 0;
     }

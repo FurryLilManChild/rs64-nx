@@ -15,6 +15,7 @@
 #include "m64p_types.h"
 #include "m64p_vidext.h"
 #include "nx_settings.h"
+#include "../lib/GLideN64/src/cvnx_prof.h"
 
 extern SDL_Window* cvnx_window;
 
@@ -294,12 +295,14 @@ m64p_error nx_VidExt_GL_SwapBuffers(void) {
     // Saving shows GLideN64's progress text, which swaps through here again: stamp the time first.
     if (SDL_GetTicks64() - shaders_saved_at >= SHADER_SAVE_MS) {
         shaders_saved_at = SDL_GetTicks64();
+        cvnxprof::ZoneTimer save_timer(cvnxprof::ZONE_SHADER_SAVE);
         cvnx_gliden64_save_shaders();
     }
     cvnx_menu_on_swap(nx::screen_width(), nx::screen_height());
 #ifdef CVNX_REMOTE
     cvnx_remote_on_swap(nx::screen_width(), nx::screen_height());
 #endif
+    cvnxprof::ZoneTimer swap_timer(cvnxprof::ZONE_SWAP);
     SDL_GL_SwapWindow(cvnx_window);
     return M64ERR_SUCCESS;
 }
