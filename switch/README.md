@@ -21,9 +21,8 @@ The first mission holds the game's full 30 fps in handheld at the stock 1020 MHz
 played with the CPU overclocked and not yet measured at stock.
 
 Known issues:
-- Widescreen (16:9, the default) shows glitches at the edges of the terrain, because the game only draws the terrain
-  a 4:3 view can see. Set Aspect Ratio to 4:3 in NX Options and restart the game for the original framing without
-  them.
+- 4:3 is the default. Widescreen (Aspect Ratio 16:9 in NX Options) shows glitches at the edges of the terrain,
+  because the game only draws the terrain a 4:3 view can see.
 - Brief stutter the first time an effect appears while its shader compiles; this mostly goes away on later launches.
 - The PC version's extras (online co-op, mods, the RT64 lighting and effects enhancements) are not in this build.
 - Title takeover only: launch through a game, not the Album applet.

@@ -25,8 +25,10 @@ namespace {
     const nx::SettingInfo SETTINGS[COUNT] = {
         {"Overlays", "show_fps", "Show FPS", "Frames shown per second, in the top left corner.", 0, OFF_ON},
         {"Display", "aspect_ratio", "Aspect Ratio",
-         "16:9 fills the screen. 4:3 shows the original framing with black bars on the sides.",
-         0, {"16:9", "4:3"}, 0, 0, 0, true},
+         "4:3 shows the original framing with black bars on the sides. 16:9 fills the screen, with glitches at the "
+         "edges of the terrain.",
+         // 4:3 by default: 16:9 shows the edges of the terrain, which the game only draws for a 4:3 view.
+         1, {"16:9", "4:3"}, 0, 0, 0, true},
         {"Display", "resolution_scale", "Resolution",
          "Internal resolution. 1x is the N64's own and the lightest, 2x is sharper, 3x "
          "fills the height of the 720p screen. 4x (experimental) renders 1280x960 into a 1080p output, for a docked "
