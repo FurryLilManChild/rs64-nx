@@ -110,8 +110,9 @@ namespace {
         } catch (...) {
             fprintf(stderr, "[CVNX] uncaught non-standard exception\n");
         }
-        svcSleepThread(2000000000ULL);
-        std::abort();
+        // abort() ends in an Atmosphère fatal screen that needs a reboot; end the process instead.
+        fflush(nullptr);
+        svcExitProcess();
     }
 
     void init_logging() {
@@ -131,10 +132,14 @@ namespace {
         const std::string previous_path = (DATA_DIR / "rs64recomp.prev.log").string();
         std::remove(previous_path.c_str());
         std::rename(log_path.c_str(), previous_path.c_str());
-        // Both streams append: two write-mode streams on one file each keep their own offset and overwrite each other.
-        if (FILE* f = std::fopen(log_path.c_str(), "w")) std::fclose(f);
-        freopen(log_path.c_str(), "a", stdout);
-        freopen(log_path.c_str(), "a", stderr);
+        // stderr gets its own file: Horizon's file system refuses a second write handle on an open file, so a stderr
+        // reopened onto the log was closed and everything printed to it was lost.
+        const std::string err_path = (DATA_DIR / "rs64recomp.err.log").string();
+        const std::string err_previous_path = (DATA_DIR / "rs64recomp.err.prev.log").string();
+        std::remove(err_previous_path.c_str());
+        std::rename(err_path.c_str(), err_previous_path.c_str());
+        freopen(log_path.c_str(), "w", stdout);
+        freopen(err_path.c_str(), "w", stderr);
         setvbuf(stdout, nullptr, _IONBF, 0);
         setvbuf(stderr, nullptr, _IONBF, 0);
     }
@@ -253,6 +258,7 @@ namespace {
 const char* cvnx_program_path = nullptr;
 
 extern "C" void cvnx_track_thread(const char* name);
+extern "C" void cvnx_crash_log_open(const char* path);  // crash_switch.c
 
 int main(int argc, char** argv) {
 #ifdef CVNX_REMOTE
@@ -261,6 +267,7 @@ int main(int argc, char** argv) {
     if (argc > 0) cvnx_program_path = argv[0];
     std::set_terminate(log_terminate);
     init_logging();
+    cvnx_crash_log_open("/switch/rs64recomp/rs64recomp.crash.log");
     cvnx_track_thread("Main");
     printf("[CVNX] Rogue Squadron 64 Recompiled %s for Switch, applet type %d (%llu ms)\n", VERSION_STRING.c_str(),
            static_cast<int>(appletGetAppletType()), cvnx_ms_since_boot());

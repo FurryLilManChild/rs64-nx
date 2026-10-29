@@ -15,7 +15,6 @@
 #include "m64p_types.h"
 #include "m64p_vidext.h"
 #include "nx_settings.h"
-#include "../lib/GLideN64/src/cvnx_prof.h"
 
 extern SDL_Window* cvnx_window;
 
@@ -268,12 +267,6 @@ void cvnx_remote_on_swap(int width, int height);
 unsigned long long cvnx_ms_since_boot();  // main_switch.cpp
 
 m64p_error nx_VidExt_GL_SwapBuffers(void) {
-    // Above 30 fps a frame is presented every VI (each display list processed twice, or one per VI in the True
-    // mode). The copy of each frame back to RDRAM (double-buffered read-back) did not fit: it stalled ProcessDList
-    // for ~12 ms (20 ms -> 7.3 ms per pass in game). DK64's pause and transitions look the same without it. At 30 fps
-    // it stays as it was.
-    static bool fast = false;
-    static bool first_copy_setting = true;
     static int applied_interval = -1;
     static bool first_frame = true;
     if (first_frame) {
@@ -281,12 +274,6 @@ m64p_error nx_VidExt_GL_SwapBuffers(void) {
         printf("[CVNX] step: first frame presented (%llu ms)\n", cvnx_ms_since_boot());
     }
     const bool wants_fast = nx::above_30();
-    // Rogue Squadron test: no copy of each frame back to RDRAM at any rate (the read-back took 6-8 ms of every frame).
-    if (wants_fast != fast || first_copy_setting) {
-        cvnx_gliden64_set("copy", 0);
-        fast = wants_fast;
-        first_copy_setting = false;
-    }
     const int interval = wants_fast ? cvnx_fast_swap_interval : swap_interval;
     if (interval != applied_interval) {
         SDL_GL_SetSwapInterval(interval);
@@ -298,14 +285,12 @@ m64p_error nx_VidExt_GL_SwapBuffers(void) {
     // Saving shows GLideN64's progress text, which swaps through here again: stamp the time first.
     if (SDL_GetTicks64() - shaders_saved_at >= SHADER_SAVE_MS) {
         shaders_saved_at = SDL_GetTicks64();
-        cvnxprof::ZoneTimer save_timer(cvnxprof::ZONE_SHADER_SAVE);
         cvnx_gliden64_save_shaders();
     }
     cvnx_menu_on_swap(nx::screen_width(), nx::screen_height());
 #ifdef CVNX_REMOTE
     cvnx_remote_on_swap(nx::screen_width(), nx::screen_height());
 #endif
-    cvnxprof::ZoneTimer swap_timer(cvnxprof::ZONE_SWAP);
     SDL_GL_SwapWindow(cvnx_window);
     return M64ERR_SUCCESS;
 }
@@ -380,6 +365,9 @@ void cvnx_seed_gliden64_config() {
     // Threaded video (GL calls on their own thread) measured worse at the stock 1020 MHz CPU: in DK Isles' water,
     // 16 present intervals of 25-31 ms in 4 s, against none without it.
     set_param(gliden, "ThreadedVideo", bool_param(false), false);
+    // No copy of each frame back to RDRAM: a full first mission, pause menu and briefings looked the same without it, and
+    // it cost about 17 ms of every frame at stock clocks (GPU wait plus conversion; 19 fps in combat, 29-30 without).
+    set_param(gliden, "EnableCopyColorToRDRAM", int_param(0), false);
     set_param(gliden, "EnableLOD", bool_param(nx::at_startup(nx::Setting::TextureLod) == 1), false);
     // NX Options' Texture Filter: 0 Standard (GLideN64's bilinearMode 1), 1 N64 3-point (0). Compiled into the shaders.
     set_param(gliden, "bilinearMode", bool_param(nx::at_startup(nx::Setting::TextureFilter) == 0), false);
