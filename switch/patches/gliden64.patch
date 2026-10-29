@@ -1509,10 +1509,15 @@ index 6da9424e..4b3cb8ed 100644
  
  	void _drawOSD(const char *_pText, float _x, float & _y);
 diff --git a/src/RSP.cpp b/src/RSP.cpp
-index b66c782c..b159fcc6 100644
+index b66c782c..8939cd06 100644
 --- a/src/RSP.cpp
 +++ b/src/RSP.cpp
-@@ -56,6 +56,7 @@ void _ProcessDList()
+@@ -1,3 +1,4 @@
++#include "cvnx_prof.h"
+ #include <algorithm>
+ #include <cstring>
+ #include "DebugDump.h"
+@@ -56,6 +57,7 @@ void _ProcessDList()
  			--pci;
  		RSP.nextCmd = _SHIFTR(*(u32*)&RDRAM[RSP.PC[pci]], 24, 8);
  
@@ -1520,6 +1525,14 @@ index b66c782c..b159fcc6 100644
  		GBI.cmd[RSP.cmd](RSP.w0, RSP.w1);
  		RSP_CheckDLCounter();
  	}
+@@ -109,6 +111,7 @@ void RSP_CheckDLCounter()
+ 
+ void RSP_ProcessDList()
+ {
++	CVNX_ZONE(ZONE_DLIST);
+ 	RSP.LLE = false;
+ 
+ 	if (ConfigOpen || dwnd().isResizeWindow()) {
 diff --git a/src/RSP.h b/src/RSP.h
 index bf3ba27e..5df92e61 100644
 --- a/src/RSP.h
@@ -1625,7 +1638,7 @@ index b129458f..793ee483 100644
  };
 diff --git a/src/cvnx_prof.h b/src/cvnx_prof.h
 new file mode 100644
-index 00000000..2a245986
+index 00000000..6a962268
 --- /dev/null
 +++ b/src/cvnx_prof.h
 @@ -0,0 +1,77 @@
@@ -1656,7 +1669,7 @@ index 00000000..2a245986
 +    uint32_t calls;
 +};
 +
-+enum Zone { ZONE_TEXTURES, ZONE_DRAW, ZONE_SWAP, ZONE_SHADER_SAVE, ZONE_COUNT };
++enum Zone { ZONE_TEXTURES, ZONE_DRAW, ZONE_SWAP, ZONE_SHADER_SAVE, ZONE_VTX, ZONE_TRIGEN, ZONE_DLIST, ZONE_COUNT };
 +
 +constexpr int MAX_SLOTS = 160;
 +extern Slot slots[MAX_SLOTS];
@@ -1781,3 +1794,31 @@ index dc982986..eedc677d 100644
  			break;
  		case G_MW_FOG:
  			gSPFogFactor( (s16)_SHIFTR( w1, 16, 16 ), (s16)_SHIFTR( w1, 0, 16 ) );
+diff --git a/src/uCodes/F5Rogue.cpp b/src/uCodes/F5Rogue.cpp
+index 5121b8f8..a2a1f081 100644
+--- a/src/uCodes/F5Rogue.cpp
++++ b/src/uCodes/F5Rogue.cpp
+@@ -3,6 +3,7 @@
+  * Microcode decoding: olivieryuyu
+  */
+ 
++#include "cvnx_prof.h"
+ #include <assert.h>
+ #include <string.h>
+ #include <array>
+@@ -166,6 +167,7 @@ void F3DSWRS_MoveMem(u32 _w0, u32)
+ 
+ void F3DSWRS_Vtx(u32 _w0, u32 _w1)
+ {
++	CVNX_ZONE(ZONE_VTX);
+ 	DebugMsg(DEBUG_NORMAL, "F3DSWRS_Vtx (0x%08x, 0x%08x)\n", _w0, _w1);
+ 
+ 	const u32 address = RSP_SegmentToPhysical(_w1);
+@@ -1011,6 +1013,7 @@ void TriGen02()
+ 
+ void F3DSWRS_TriGen(u32 _w0, u32 _w1)
+ {
++	CVNX_ZONE(ZONE_TRIGEN);
+ 	DebugMsg(DEBUG_NORMAL, "F3DSWRS_TriGen (0x%08x, 0x%08x)\n", _w0, _w1);
+ 
+ 	const u32 nextCmd = RSP.nextCmd;

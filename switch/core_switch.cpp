@@ -273,6 +273,7 @@ m64p_error nx_VidExt_GL_SwapBuffers(void) {
     // for ~12 ms (20 ms -> 7.3 ms per pass in game). DK64's pause and transitions look the same without it. At 30 fps
     // it stays as it was.
     static bool fast = false;
+    static bool first_copy_setting = true;
     static int applied_interval = -1;
     static bool first_frame = true;
     if (first_frame) {
@@ -280,9 +281,11 @@ m64p_error nx_VidExt_GL_SwapBuffers(void) {
         printf("[CVNX] step: first frame presented (%llu ms)\n", cvnx_ms_since_boot());
     }
     const bool wants_fast = nx::above_30();
-    if (wants_fast != fast) {
-        cvnx_gliden64_set("copy", wants_fast ? 0 : 2);  // 2: GLideN64's default, ctDoubleBuffer
+    // Rogue Squadron test: no copy of each frame back to RDRAM at any rate (the read-back took 6-8 ms of every frame).
+    if (wants_fast != fast || first_copy_setting) {
+        cvnx_gliden64_set("copy", 0);
         fast = wants_fast;
+        first_copy_setting = false;
     }
     const int interval = wants_fast ? cvnx_fast_swap_interval : swap_interval;
     if (interval != applied_interval) {

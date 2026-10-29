@@ -53,6 +53,10 @@ void report(uint32_t frames) {
                 ms(gl_ticks), ms(zone_ticks[ZONE_DRAW]), ms(zone_gl_ticks[ZONE_DRAW]), ms(zone_ticks[ZONE_TEXTURES]),
                 ms(zone_gl_ticks[ZONE_TEXTURES]), ms(zone_ticks[ZONE_SWAP]),
                 armTicksToNs(zone_ticks[ZONE_SHADER_SAVE]) / 1e6);
+    std::printf("[CVNX] gfx zones per frame: display list %.1f ms (GL %.1f); terrain %.1f ms (GL %.1f); "
+                "vertices %.1f ms\n",
+                ms(zone_ticks[ZONE_DLIST]), ms(zone_gl_ticks[ZONE_DLIST]), ms(zone_ticks[ZONE_TRIGEN]),
+                ms(zone_gl_ticks[ZONE_TRIGEN]), ms(zone_ticks[ZONE_VTX]));
 
     int order[MAX_SLOTS];
     const int count = slot_count;
