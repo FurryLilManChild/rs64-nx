@@ -1,4 +1,7 @@
-> **Nintendo Switch fork.** This repository adds a Switch homebrew build in [`switch/`](switch/README.md) (GLideN64 renderer, libnx layer from DK64Recomp-NX). Everything below is the upstream PC project's README.
+> **Nintendo Switch:** this fork adds a homebrew (.nro) build in [`switch/`](switch/README.md): status, install and
+> known issues are there, and test builds are on the [Releases](../../releases) page. Original project:
+> [MikeSemicolonD/RogueSquadron64Recomp](https://github.com/MikeSemicolonD/RogueSquadron64Recomp). The rest of this
+> README is the original project's and describes the PC build.
 
 <div align="center">
 
