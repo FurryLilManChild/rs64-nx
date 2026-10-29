@@ -16,7 +16,7 @@ Trinalord777.
 
 ## Status
 
-Version 1.0. On a V1 Switch with Atmosphère the game boots and plays with music, sound effects and voices.
+Version 1.0.1. On a V1 Switch with Atmosphère the game boots and plays with music, sound effects and voices.
 The first mission holds the game's full 30 fps in handheld at the stock 1020 MHz CPU clock; later missions have been
 played with the CPU overclocked and not yet measured at stock.
 

@@ -149,7 +149,7 @@ target_include_directories(rs64recomp PRIVATE
     ${ROOT}/lib/rt64/src
     ${ROOT}/lib/N64ModernRuntime/thirdparty
 )
-target_compile_definitions(rs64recomp PRIVATE RS64_VERSION_STRING="1.0.0-switch")
+target_compile_definitions(rs64recomp PRIVATE RS64_VERSION_STRING="1.0.1-switch")
 # OBJECT objects link like the game's own sources, so the func_map binds to the patch bodies (as on PC).
 target_sources(rs64recomp PRIVATE $<TARGET_OBJECTS:PatchesLib>)
 target_compile_options(rs64recomp PRIVATE -fno-strict-aliasing -fms-extensions)
@@ -178,7 +178,7 @@ nx_generate_nacp(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/rs64recomp.nacp
     NAME "Rogue Squadron 64 Recompiled"
     AUTHOR "RS64Recomp team, Switch layer from DK64Recomp-NX"
-    VERSION "1.0.0"
+    VERSION "1.0.1"
 )
 nx_create_nro(rs64recomp_nro
     TARGET rs64recomp
