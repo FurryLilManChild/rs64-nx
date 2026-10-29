@@ -39,7 +39,7 @@ included and is needed to play.
    SHA-1 `ed42eed1ee2db646ff7ef94ba8c5421d164a4f0d`.
 3. Launch from the Homebrew Menu through title takeover (hold R while opening a game), not the Album applet.
 
-Minus + Plus opens the NX Options menu (resolution, aspect ratio, frame rate, controls, performance, volume, quit).
+Minus + Plus opens the NX Options menu (resolution, aspect ratio, controls, performance, volume, quit).
 
 ## Reporting problems
 

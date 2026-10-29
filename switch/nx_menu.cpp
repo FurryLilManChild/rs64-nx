@@ -55,7 +55,7 @@ namespace {
     constexpr Setting SETTINGS_TAB[] = {
         Setting::Resolution, Setting::AspectRatio, Setting::TextureLod, Setting::TextureFilter,
         Setting::ShowFps, Setting::PerformanceOverlay, Setting::InputViewer,
-        Setting::FrameRate, Setting::ClockProfile,
+        Setting::ClockProfile,
         Setting::MasterVolume,
         Setting::MapA, Setting::MapB, Setting::MapX, Setting::MapY, Setting::MapL, Setting::MapR,
         Setting::MapZL, Setting::MapZR, Setting::MapPlus, Setting::MapMinus, Setting::MapUp, Setting::MapDown,

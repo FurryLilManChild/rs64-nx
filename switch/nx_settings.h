@@ -71,9 +71,9 @@ namespace nx {
     inline int screen_width() { return output_1080p() ? 1920 : 1280; }
     inline int screen_height() { return output_1080p() ? 1080 : 720; }
     inline bool widescreen() { return at_startup(Setting::AspectRatio) == 0; }
-    // Frames shown per second: 30 is the game's own rate; above it, some of its frames get an in-between image
-    // (all of them at 60).
-    inline int target_fps() { return get(Setting::FrameRate); }
+    // Always the game's own 30 fps: the in-between images pair objects by the DK64-style group IDs, which Rogue
+    // Squadron's display lists do not carry, so the option is not offered (a saved frame_rate_fps is ignored).
+    inline int target_fps() { return 30; }
     // Above 30 fps: in-between images (the game keeps its 30 steps per second), or, in the True mode, frames of the
     // game itself, as fast as the chosen rate.
     inline bool above_30() { return target_fps() > 30; }
