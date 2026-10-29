@@ -94,7 +94,7 @@ extern "C" unsigned long long cvnx_ms_since_boot() { return armTicksToNs(armGetS
 namespace {
     const std::filesystem::path DATA_DIR = "sdmc:/switch/rs64recomp";
     std::u8string GAME_ID = u8"rs64.n64.us.1.0";
-    const std::string VERSION_STRING = "0.1.0";
+    const std::string VERSION_STRING = "1.0.0";
 
     // With the time since the console booted, to see where the start of the game goes.
     void step(const char* what) {

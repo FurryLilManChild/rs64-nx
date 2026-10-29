@@ -1,5 +1,5 @@
 > **Nintendo Switch:** this fork adds a homebrew (.nro) build in [`switch/`](switch/README.md): status, install and
-> known issues are there, and test builds are on the [Releases](../../releases) page. Original project:
+> known issues are there, and releases are on the [Releases](../../releases) page. Original project:
 > [MikeSemicolonD/RogueSquadron64Recomp](https://github.com/MikeSemicolonD/RogueSquadron64Recomp). The rest of this
 > README is the original project's and describes the PC build.
 
